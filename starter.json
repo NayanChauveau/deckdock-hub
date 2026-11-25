@@ -118,6 +118,7 @@
       "files": [
         "src/modules/decks/**",
         "tests/decks.domain.test.ts",
+        "tests/decks.files.test.ts",
         "tests/decks.integration.ts",
         "tests/support/in-memory-decks.ts"
       ]
