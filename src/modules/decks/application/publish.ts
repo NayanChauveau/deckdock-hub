@@ -69,7 +69,6 @@ export interface NewVersion {
   deck: RecordId
   edition: string
   version: string
-  receivedAt: Date
   summary: VersionSummary
   files: FileMap
   deckJsonSha256: string
@@ -83,7 +82,8 @@ export interface PublishStore {
   /**
    * In one transaction that locks the edition row: the edition (created if new), the version, and
    * the edition's latest version, which becomes the new one: the latest is always the version
-   * received last, in the order the lock serialises. Nothing is written when the version was
+   * received last, in the order the lock serialises. `receivedAt` is the time the lock was
+   * acquired, so the order of reception and of `latestVersion` agree. Nothing is written when the version was
    * already taken (`exists`: a concurrent publish won the unique index) or when the edition's
    * latest version is no longer `expectedLatest` (`stale`: another version was recorded since the
    * checks ran).
@@ -206,8 +206,9 @@ export async function publishEdition<Archive>(
     ])
     return { ...result, retryAfter: deps.busyRetryAfter }
   }
-  const workspace = deps.workspace(input.archive)
+  let workspace: EditionWorkspace | null = null
   try {
+    workspace = deps.workspace(input.archive)
     // 3. Size of the upload.
     if ((await workspace.receive()) === 'too_large')
       return refused(413, [
@@ -299,7 +300,6 @@ export async function publishEdition<Archive>(
         deck: deck.id,
         edition: input.edition,
         version: facts.version,
-        receivedAt: deps.clock(),
         summary,
         files,
         deckJsonSha256,
@@ -329,7 +329,7 @@ export async function publishEdition<Archive>(
     )
   } finally {
     try {
-      await workspace.dispose()
+      await workspace?.dispose()
     } finally {
       release()
     }

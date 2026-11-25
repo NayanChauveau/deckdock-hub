@@ -69,7 +69,7 @@ export const publishDeps = (payload: Payload): PublishDeps<Upload> => {
   const checker = pythonChecker()
   return {
     decks: decksDeps(payload),
-    store: payloadPublishStore(payload),
+    store: payloadPublishStore(payload, () => new Date()),
     workspace: (upload) => editionWorkspace({ dataDir, maxUploadBytes: limit, upload, checker }),
     rateLimit: publishLimiter,
     slot: () => publishSlots.acquire(),

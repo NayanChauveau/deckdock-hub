@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Readable } from 'node:stream'
+import { Readable, Writable } from 'node:stream'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { after, test } from 'node:test'
 import { blobPath } from '../src/modules/decks/adapters/files/blob-store'
 import {
@@ -253,7 +254,48 @@ void test('a body the client stops sending is an aborted upload, and is cleaned 
     upload: { body, declaredLength: null },
     checker: fakeChecker().checker,
   })
-  await assert.rejects(ws.receive(), UploadAborted)
+  await assert.rejects(ws.receive(), (error: unknown) => {
+    assert.ok(error instanceof UploadAborted)
+    assert.equal(error.code, 'ECONNRESET')
+    return true
+  })
+  await ws.dispose()
+  assert.deepEqual(await readdir(join(dir, 'tmp')), [])
+})
+
+function webBody() {
+  const body = Readable.fromWeb(
+    new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024))
+      },
+    }) as unknown as NodeReadableStream<Uint8Array>,
+  )
+  body.on('error', () => undefined) // as the route does
+  return body
+}
+
+void test('a disk that fails while the body is written is a server error, not an abort', async () => {
+  const dir = await dataDir()
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    // A web body (as the route converts it), still sending when the disk fails: the pipeline
+    // destroys it with the disk's error, so `body.errored` alone does not tell an abort.
+    upload: { body: webBody(), declaredLength: null },
+    checker: fakeChecker().checker,
+    sink: () =>
+      new Writable({
+        write(_chunk, _encoding, done) {
+          done(Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }))
+        },
+      }),
+  })
+  await assert.rejects(ws.receive(), (error: unknown) => {
+    assert.ok(!(error instanceof UploadAborted), 'not an abort')
+    assert.equal(Reflect.get(Object(error), 'code'), 'ENOSPC')
+    return true
+  })
   await ws.dispose()
   assert.deepEqual(await readdir(join(dir, 'tmp')), [])
 })

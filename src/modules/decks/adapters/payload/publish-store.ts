@@ -27,7 +27,10 @@ const toVersion = (doc: unknown): StoredVersion => ({
  * recorded with its edition and the edition's latest version in one database transaction; the
  * unique indexes on (deck, code) and (edition, version) settle concurrent publishes.
  */
-export function payloadPublishStore(payload: Payload): PublishStore {
+export function payloadPublishStore(
+  payload: Payload,
+  clock: () => Date = () => new Date(),
+): PublishStore {
   const system = { overrideAccess: true, depth: 0 } as const
 
   const findEdition = async (deck: number, code: string, req?: Partial<PayloadRequest>) =>
@@ -113,12 +116,13 @@ export function payloadPublishStore(payload: Payload): PublishStore {
             await payload.db.rollbackTransaction(transactionID)
             return 'stale'
           }
+          const receivedAt = clock()
           const version = await payload.create({
             collection: 'versions',
             data: {
               edition: editionId,
               version: input.version,
-              receivedAt: input.receivedAt.toISOString(),
+              receivedAt: receivedAt.toISOString(),
               summary: { ...input.summary },
               files: { ...input.files },
               deckJsonSha256: input.deckJsonSha256,
