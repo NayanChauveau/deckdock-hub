@@ -73,15 +73,29 @@ export async function revokeToken(
 }
 
 /**
- * The deck a publish token belongs to, whatever its status (the caller refuses a hidden deck), and
- * records the use. A malformed token is refused without touching the store; a revoked one has no
- * hash to match. The lookup is an equality on the hash, so no token is ever compared byte by byte.
+ * The deck a publish token belongs to, whatever its status, without recording the use. A malformed
+ * token is refused without touching the store; a revoked one has no hash to match. The lookup is an
+ * equality on the hash, so no token is ever compared byte by byte.
  */
-export async function deckForToken(deps: DecksDeps, token: string): Promise<Deck | null> {
+export async function findDeckByToken(deps: DecksDeps, token: string): Promise<Deck | null> {
   if (!isPublishTokenFormat(token)) return null
-  const deck = await deps.store.deckByTokenHash(deps.hash(token))
-  if (!deck) return null
+  return deps.store.deckByTokenHash(deps.hash(token))
+}
+
+/** Records that the deck's token was just used (shown to the author as its last use). */
+export async function recordTokenUse(deps: DecksDeps, deck: Deck): Promise<Deck> {
   const at = deps.clock()
   await deps.store.touchToken(deck.id, at)
   return { ...deck, tokenLastUsedAt: at }
+}
+
+/**
+ * The deck a publish token belongs to, whatever its status (the caller refuses a hidden deck), and
+ * records the use. The publish API looks up and records in two steps instead
+ * (`findDeckByToken`, then `recordTokenUse` once the request passed the rate limit and the hidden
+ * check).
+ */
+export async function deckForToken(deps: DecksDeps, token: string): Promise<Deck | null> {
+  const deck = await findDeckByToken(deps, token)
+  return deck && recordTokenUse(deps, deck)
 }

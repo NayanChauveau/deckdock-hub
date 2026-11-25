@@ -13,6 +13,7 @@ import {
 } from '../src/modules/decks/application/publish'
 import { isEditionCode } from '../src/modules/decks/domain/edition'
 import { windowRateLimiter } from '../src/modules/decks/adapters/http/rate-limit'
+import { semaphore } from '../src/modules/decks/adapters/http/semaphore'
 import { inMemoryDecksStore } from './support/in-memory-decks'
 import { present } from './support/present'
 
@@ -93,8 +94,20 @@ interface Stored {
 function inMemoryPublishStore() {
   const editions: { id: number; deck: number; code: string; latest: number | null }[] = []
   const versions: (Stored & { id: number; summary: unknown })[] = []
+  /** The `expectedLatest` of every successful `record`. */
+  const records: (number | null)[] = []
   /** Set to simulate a concurrent publish that wins the unique index before `record`. */
   let racer: Omit<Stored, 'edition'> | null = null
+  /**
+   * Versions other publishes record (and make latest) just before the next `record` calls, one per
+   * call: another version of the edition committed between step 9 and step 10.
+   */
+  const interleaved: Omit<Stored, 'edition'>[] = []
+  const push = (edition: { id: number; latest: number | null }, value: Omit<Stored, 'edition'>) => {
+    const id = versions.length + 1
+    versions.push({ ...value, id, edition: edition.id, summary: {} })
+    return id
+  }
   const ensureEdition = (deck: number, code: string) => {
     let edition = editions.find((e) => e.deck === deck && e.code === code)
     if (!edition) {
@@ -110,7 +123,9 @@ function inMemoryPublishStore() {
       const latest = versions.find((v) => v.id === edition.latest)
       return {
         id: edition.id,
-        latest: latest ? { version: latest.version, deckJsonSha256: latest.deckJsonSha256 } : null,
+        latest: latest
+          ? { id: latest.id, version: latest.version, deckJsonSha256: latest.deckJsonSha256 }
+          : null,
       }
     },
     version: async (edition, version) => {
@@ -122,11 +137,15 @@ function inMemoryPublishStore() {
     record: async (input) => {
       const edition = ensureEdition(input.deck, input.edition)
       if (racer) {
-        versions.push({ ...racer, id: versions.length + 1, edition: edition.id, summary: {} })
+        push(edition, racer)
         racer = null
       }
+      const other = interleaved.shift()
+      if (other) edition.latest = push(edition, other)
       if (versions.some((v) => v.edition === edition.id && v.version === input.version))
         return 'exists'
+      if (edition.latest !== input.expectedLatest) return 'stale'
+      records.push(input.expectedLatest)
       const id = versions.length + 1
       versions.push({
         id,
@@ -144,8 +163,12 @@ function inMemoryPublishStore() {
     store,
     editions,
     versions,
+    records,
     race: (value: Omit<Stored, 'edition'>) => {
       racer = value
+    },
+    interleave: (...values: Omit<Stored, 'edition'>[]) => {
+      interleaved.push(...values)
     },
   }
 }
@@ -158,6 +181,8 @@ async function setup() {
   const { deck, token } = await createDeck(decks, 1, 'verbs')
   const publish = inMemoryPublishStore()
   let limited: number | null = null
+  let slotFree = true
+  const slots = { taken: 0, released: 0 }
   const deps = (script: Script) => {
     const fake = fakeWorkspace(script)
     const value: PublishDeps<string> = {
@@ -165,6 +190,14 @@ async function setup() {
       store: publish.store,
       workspace: () => fake.workspace,
       rateLimit: () => limited,
+      slot: async () => {
+        if (!slotFree) return null
+        slots.taken++
+        return () => {
+          slots.released++
+        }
+      },
+      busyRetryAfter: 30,
       clock: () => now,
     }
     return { deps: value, calls: fake.calls }
@@ -178,6 +211,11 @@ async function setup() {
     limit: (seconds: number | null) => {
       limited = seconds
     },
+    slots,
+    busy: () => {
+      slotFree = false
+    },
+    lastUse: async () => (await decksStore.deckByTokenHash(hash(token)))?.tokenLastUsedAt ?? null,
     tick: () => {
       now = new Date(now.getTime() + 1000)
     },
@@ -407,4 +445,150 @@ void test('the rate limiter allows a window of requests per key, then gives the 
   now = 100_000
   assert.equal(limiter(3), null)
   assert.equal(limiter.size(), 1)
+})
+
+void test('the token use is recorded only past the rate limit and the hidden check', async () => {
+  const ctx = await setup()
+  ctx.limit(5)
+  await run(ctx.deps({}).deps, ctx.token)
+  assert.equal(await ctx.lastUse(), null)
+  ctx.limit(null)
+  await ctx.setStatus('hidden')
+  await run(ctx.deps({}).deps, ctx.token)
+  assert.equal(await ctx.lastUse(), null)
+  const other = await setup()
+  await run(other.deps({ unpack: [{ where: 'archive', message: 'bad' }] }).deps, other.token)
+  assert.ok(await other.lastUse())
+})
+
+void test('no free publish slot in time: 503 with Retry-After, nothing read', async () => {
+  const ctx = await setup()
+  ctx.busy()
+  const { deps, calls } = ctx.deps({})
+  const result = await run(deps, ctx.token)
+  assert.equal(result.httpStatus, 503)
+  assert.equal(result.retryAfter, 30)
+  assert.equal(result.body.status, 'rejected')
+  assert.deepEqual(calls, [])
+})
+
+void test('the publish slot is released after success, refusal and error', async () => {
+  const ctx = await setup()
+  await run(ctx.deps({}).deps, ctx.token)
+  await run(ctx.deps({ check: [{ where: 'x', message: 'y' }] }).deps, ctx.token)
+  const { deps } = ctx.deps({})
+  await assert.rejects(
+    run(
+      {
+        ...deps,
+        workspace: () => ({
+          ...deps.workspace('body'),
+          receive: async () => {
+            throw new Error('disk')
+          },
+        }),
+      },
+      ctx.token,
+    ),
+    /disk/,
+  )
+  assert.deepEqual(ctx.slots, { taken: 3, released: 3 })
+  // Refused before the slot: none taken.
+  await run(ctx.deps({}).deps, ctx.token, '..')
+  assert.equal(ctx.slots.taken, 3)
+})
+
+void test('another version recorded meanwhile: steps 8-9 run again against it, once', async () => {
+  const files = (tag: string) => ({ 'deck.json': { sha256: sha(tag), size: 10 } })
+  {
+    // v1 published; then v3 commits between our step 9 and step 10.
+    const ctx = await setup()
+    await run(ctx.deps({ deck: deckJson({ version: 'v1' }), files: files('1') }).deps, ctx.token)
+    const v1 = ctx.publish.versions[0]
+    ctx.publish.interleave({ version: 'v3', deckJsonSha256: sha('3'), files: files('3') })
+    const { deps, calls } = ctx.deps({ deck: deckJson({ version: 'v2' }), files: files('2') })
+    const result = await run(deps, ctx.token)
+    assert.equal(result.httpStatus, 200, JSON.stringify(result.body))
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith('compat:')),
+      [`compat:${v1?.deckJsonSha256}`, `compat:${sha('3')}`],
+    )
+    // Recorded against v3, and latest is the version received last: v2.
+    const v3 = ctx.publish.versions.find((v) => v.version === 'v3')
+    assert.equal(ctx.publish.records.at(-1), v3?.id)
+    const v2 = ctx.publish.versions.find((v) => v.version === 'v2')
+    assert.equal(ctx.publish.editions[0]?.latest, v2?.id)
+  }
+  {
+    // The newer latest version is incompatible: 409 from the second compat.
+    const ctx = await setup()
+    await run(ctx.deps({ deck: deckJson({ version: 'v1' }), files: files('1') }).deps, ctx.token)
+    ctx.publish.interleave({ version: 'v3', deckJsonSha256: sha('3'), files: files('3') })
+    const result = await run(
+      ctx.deps({
+        deck: deckJson({ version: 'v2' }),
+        files: files('2'),
+        compat: [{ notetype: 'basic', kind: 'breaking', detail: 'changed' }],
+      }).deps,
+      ctx.token,
+    )
+    assert.equal(result.httpStatus, 409)
+  }
+  {
+    // It changes again: 409, retry.
+    const ctx = await setup()
+    await run(ctx.deps({ deck: deckJson({ version: 'v1' }), files: files('1') }).deps, ctx.token)
+    ctx.publish.interleave(
+      { version: 'v3', deckJsonSha256: sha('3'), files: files('3') },
+      { version: 'v4', deckJsonSha256: sha('4'), files: files('4') },
+    )
+    const result = await run(
+      ctx.deps({ deck: deckJson({ version: 'v2' }), files: files('2') }).deps,
+      ctx.token,
+    )
+    assert.equal(result.httpStatus, 409)
+    assert.match(result.body.errors[0]?.message ?? '', /at the same time/)
+    assert.equal(ctx.publish.versions.filter((v) => v.version === 'v2').length, 0)
+  }
+})
+
+void test('the publish semaphore: holders, waiting in order, timeout, release once', async () => {
+  const slots = semaphore({ max: 2, waitMs: 50 })
+  const a = present(await slots.acquire())
+  const b = present(await slots.acquire())
+  assert.deepEqual(slots.state(), { active: 2, waiting: 0 })
+  // A third waits, then gives up.
+  assert.equal(await slots.acquire(), null)
+  assert.deepEqual(slots.state(), { active: 2, waiting: 0 })
+  // A waiter gets the slot of a holder that releases, in order.
+  const order: string[] = []
+  const c = slots.acquire().then((release) => {
+    order.push('c')
+    return release
+  })
+  const d = slots.acquire().then((release) => {
+    order.push('d')
+    return release
+  })
+  a()
+  a() // released twice: counted once
+  const cRelease = present(await c)
+  assert.deepEqual(order, ['c'])
+  assert.deepEqual(slots.state(), { active: 2, waiting: 1 })
+  b()
+  const dRelease = present(await d)
+  assert.deepEqual(order, ['c', 'd'])
+  // Released on error by the caller's finally.
+  await assert.rejects(
+    (async () => {
+      try {
+        throw new Error('boom')
+      } finally {
+        cRelease()
+      }
+    })(),
+    /boom/,
+  )
+  dRelease()
+  assert.deepEqual(slots.state(), { active: 0, waiting: 0 })
 })

@@ -1,3 +1,4 @@
+import { sql } from '@payloadcms/db-postgres'
 import { ValidationError, type Payload, type PayloadRequest } from 'payload'
 import type { FileMap, PublishStore, StoredVersion } from '../../application/publish'
 
@@ -51,6 +52,19 @@ export function payloadPublishStore(payload: Payload): PublishStore {
       })
     ).docs[0] ?? null
 
+  /** `SELECT … FOR UPDATE` on the edition, in the transaction's own session: its latest version. */
+  const lockEdition = async (transactionID: string | number, edition: number) => {
+    const session: unknown = Reflect.get(Object(payload.db.sessions), transactionID)
+    const db = Reflect.get(Object(session), 'db') as typeof payload.db.drizzle | undefined
+    if (!db) throw new Error('Transaction session not found')
+    // node-postgres returns integers as numbers; a bigint driver setting would give strings.
+    const result = await db.execute<{ latest: unknown }>(
+      sql`SELECT latest_version_id AS latest FROM editions WHERE id = ${edition} FOR UPDATE`,
+    )
+    const latest = result.rows[0]?.latest
+    return latest === undefined || latest === null ? null : Number(latest)
+  }
+
   const store: PublishStore = {
     async edition(deck, code) {
       const doc = await findEdition(deck, code)
@@ -64,6 +78,7 @@ export function payloadPublishStore(payload: Payload): PublishStore {
         id: Number(get(doc, 'id')),
         latest: latest
           ? {
+              id: Number(get(latest, 'id')),
               version: String(get(latest, 'version')),
               deckJsonSha256: String(get(latest, 'deckJsonSha256')),
             }
@@ -79,7 +94,8 @@ export function payloadPublishStore(payload: Payload): PublishStore {
       // concurrent publish of another version, and then finds the edition the second time.
       for (let attempt = 0; ; attempt++) {
         const transactionID = await payload.db.beginTransaction()
-        const req: Partial<PayloadRequest> = transactionID === null ? {} : { transactionID }
+        if (transactionID === null) throw new Error('Publishing needs database transactions')
+        const req: Partial<PayloadRequest> = { transactionID }
         try {
           const edition =
             (await findEdition(input.deck, input.edition, req)) ??
@@ -90,6 +106,13 @@ export function payloadPublishStore(payload: Payload): PublishStore {
               ...system,
             }))
           const editionId = Number(get(edition, 'id'))
+          // The edition row stays locked until commit: concurrent publishes of the edition are
+          // recorded one after the other, each against the latest version the previous one set.
+          const latest = await lockEdition(transactionID, editionId)
+          if (latest !== input.expectedLatest) {
+            await payload.db.rollbackTransaction(transactionID)
+            return 'stale'
+          }
           const version = await payload.create({
             collection: 'versions',
             data: {
@@ -110,10 +133,10 @@ export function payloadPublishStore(payload: Payload): PublishStore {
             req,
             ...system,
           })
-          if (transactionID !== null) await payload.db.commitTransaction(transactionID)
+          await payload.db.commitTransaction(transactionID)
           return 'created'
         } catch (error) {
-          if (transactionID !== null) await payload.db.rollbackTransaction(transactionID)
+          await payload.db.rollbackTransaction(transactionID)
           if (!(error instanceof ValidationError)) throw error
           const edition = await findEdition(input.deck, input.edition)
           if (edition && (await findVersion(Number(get(edition, 'id')), input.version)))

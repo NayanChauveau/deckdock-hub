@@ -36,6 +36,7 @@ async function author(handle: string, deckId: string) {
 
 interface Answer {
   status: number
+  retryAfter: string | null
   type: string
   text: string
   json: {
@@ -76,7 +77,13 @@ async function publish(
   assert.equal(typeof json.version, 'string')
   assert.equal(typeof json.notes, 'number')
   assert.ok(Array.isArray(json.warnings) && Array.isArray(json.errors))
-  return { status: response.status, type, text, json }
+  return {
+    status: response.status,
+    retryAfter: response.headers.get('retry-after'),
+    type,
+    text,
+    json,
+  }
 }
 
 const versionsOf = async (deck: number) => {
@@ -229,6 +236,52 @@ try {
     )
   }
 
+  // Two different new versions at once: both recorded (the loser judged again against the
+  // winner), and the edition's latest version is the one received last.
+  {
+    const fields = ['Front', 'Back', 'Extra']
+    const answers = await Promise.all([
+      publish(
+        'en',
+        await editionArchive(deckJson({ version: '2026-11-26-v6', fields })),
+        alice.token,
+      ),
+      publish(
+        'en',
+        await editionArchive(deckJson({ version: '2026-11-26-v7', fields })),
+        alice.token,
+      ),
+    ])
+    assert.deepEqual(
+      answers.map((answer) => [answer.status, answer.json.status]),
+      [
+        [200, 'published'],
+        [200, 'published'],
+      ],
+      answers.map((answer) => answer.text).join('\n'),
+    )
+    const versions = await versionsOf(alice.deck.id)
+    const last = present(versions.at(-1))
+    assert.deepEqual(
+      versions
+        .slice(-2)
+        .map((version) => version.version)
+        .sort(),
+      ['2026-11-26-v6', '2026-11-26-v7'],
+    )
+    const edition = present(
+      (
+        await payload.find({
+          collection: 'editions',
+          where: { deck: { equals: alice.deck.id } },
+          overrideAccess: true,
+          depth: 0,
+        })
+      ).docs[0],
+    )
+    assert.equal(edition.latestVersion, last.id)
+  }
+
   // Refusals, on another deck (its own rate limit window).
   const bob = await author('bob', 'nouns')
   const nouns = (options: Parameters<typeof deckJson>[0] = {}) =>
@@ -283,7 +336,7 @@ try {
     const answer = await publish('en', await editionArchive(deckJson()), bob.token)
     assert.equal(answer.status, 409, answer.text)
     assert.equal(answer.json.errors[0]?.where, 'deck.id')
-    assert.equal((await versionsOf(alice.deck.id)).length, 4)
+    assert.equal((await versionsOf(alice.deck.id)).length, 6)
     const other = await publish('fr', await editionArchive(nouns()), bob.token)
     assert.equal(other.status, 409, other.text)
     assert.equal(other.json.errors[0]?.where, 'deck.edition')
@@ -328,6 +381,20 @@ try {
       dave.token,
     )
     assert.equal(answer.status, 410, answer.text)
+  }
+
+  // The per-deck rate limit: 30 requests per 10 minutes, then 429 with Retry-After.
+  {
+    const eve = await author('eve', 'quotes')
+    const garbage = Buffer.from('not an archive')
+    for (let i = 0; i < 30; i++) {
+      const answer = await publish('en', garbage, eve.token)
+      assert.equal(answer.status, 422, answer.text)
+    }
+    const limited = await publish('en', garbage, eve.token)
+    assert.equal(limited.status, 429, limited.text)
+    assert.equal(limited.json.errors[0]?.where, 'rate')
+    assert.ok(Number(limited.retryAfter) > 0, String(limited.retryAfter))
   }
 
   // Every temporary directory is gone, success or refusal.

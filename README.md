@@ -77,6 +77,16 @@ l’Action DeckDock). La réponse est toujours du JSON :
   routeur Traefik `-publish`, distinct du routeur `-auth` (5 par minute) pour qu’une CI publie
   plusieurs éditions d’affilée.
 - La maintenance du site ne bloque pas la publication : les auteurs publient avant l’ouverture.
+- Ressources bornées : un `deck.json` de plus de 50 Mio est refusé (422) avant d’être lu ; au plus
+  2 publications sont traitées à la fois par processus, les suivantes attendent une place 30 s
+  puis reçoivent 503 avec `Retry-After`. Un envoi interrompu par le client est journalisé en
+  avertissement et nettoyé.
+- La dernière version d’une édition est toujours la dernière reçue : l’enregistrement verrouille la
+  ligne de l’édition (`SELECT … FOR UPDATE`) et vérifie que la dernière version est encore celle
+  comparée par `compat`. Sinon, les contrôles 8 et 9 reprennent une fois contre la nouvelle ; si elle
+  change encore, 409 « réessayer ».
+- La date de dernière utilisation du jeton n’est notée qu’après la limite de débit et le contrôle
+  du deck masqué.
 
 ## Prérequis
 

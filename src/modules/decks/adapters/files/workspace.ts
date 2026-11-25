@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Transform, type Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -19,9 +19,29 @@ export interface Upload {
 /** Most checker issues returned to the publisher; the rest are counted. */
 export const MAX_ISSUES = 100
 
+/**
+ * Largest deck.json accepted: it is parsed in memory, here and by the checker (a container of
+ * 1.5 GB), and a small gzip can expand to hundreds of MB within the extraction limit.
+ */
+export const MAX_DECK_JSON_BYTES = 52_428_800
+
 class TooLarge extends Error {}
 
+/** The client stopped sending the body (closed or reset the connection): nobody reads an answer. */
+export class UploadAborted extends Error {
+  constructor(cause: unknown) {
+    super('Upload aborted by the client', { cause })
+    this.name = 'UploadAborted'
+  }
+}
+
 const quoted = (name: string) => JSON.stringify(name.length > 120 ? `${name.slice(0, 120)}…` : name)
+
+const isPrematureClose = (error: unknown) => {
+  const code: unknown =
+    typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined
+  return code === 'ERR_STREAM_PREMATURE_CLOSE' || code === 'ECONNRESET' || code === 'ABORT_ERR'
+}
 
 async function sha256File(path: string): Promise<{ sha256: string; size: number }> {
   const hash = createHash('sha256')
@@ -44,7 +64,9 @@ export function editionWorkspace(options: {
   upload: Upload
   checker: DeckdockChecker
   limits?: ExtractLimits
+  maxDeckJsonBytes?: number
 }): EditionWorkspace {
+  const maxDeckJson = options.maxDeckJsonBytes ?? MAX_DECK_JSON_BYTES
   const { dataDir, upload, checker } = options
   const root = join(dataDir, 'tmp', `publish-${randomUUID()}`)
   const archive = join(root, 'upload.tar.gz')
@@ -81,6 +103,8 @@ export function editionWorkspace(options: {
         await pipeline(upload.body, meter, createWriteStream(archive, { flags: 'wx', mode: 0o600 }))
       } catch (error) {
         if (error instanceof TooLarge) return 'too_large'
+        // An error of the body itself (not of the disk) is the client going away.
+        if (upload.body.errored || isPrematureClose(error)) throw new UploadAborted(error)
         throw error
       }
       return 'ok'
@@ -112,6 +136,14 @@ export function editionWorkspace(options: {
       }
       if (!hasDeck) issues.push({ where: 'archive', message: `deck.json is missing. ${layout}` })
       if (issues.length) return issues.slice(0, MAX_ISSUES)
+      const deckSize = (await stat(join(staging, 'deck.json'))).size
+      if (deckSize > maxDeckJson)
+        return [
+          {
+            where: 'deck.json',
+            message: `deck.json is ${deckSize} bytes; the hub accepts at most ${maxDeckJson}.`,
+          },
+        ]
       // The checker requires deck.edition to equal the directory's name: the directory is named
       // after deck.edition when it is usable, so that a different edition than the URL's is
       // reported as a mismatch (409) rather than as a format error.

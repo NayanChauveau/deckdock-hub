@@ -5,9 +5,18 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { after, test } from 'node:test'
 import { blobPath } from '../src/modules/decks/adapters/files/blob-store'
-import { editionWorkspace, type Upload } from '../src/modules/decks/adapters/files/workspace'
+import {
+  editionWorkspace,
+  MAX_DECK_JSON_BYTES,
+  UploadAborted,
+  type Upload,
+} from '../src/modules/decks/adapters/files/workspace'
 import type { CheckIssue, DeckdockChecker } from '../src/modules/decks/adapters/python/checker'
-import { maxUploadBytes, DEFAULT_MAX_UPLOAD_BYTES } from '../src/modules/decks/composition'
+import {
+  DEFAULT_MAX_UPLOAD_BYTES,
+  hubDataDir,
+  maxUploadBytes,
+} from '../src/modules/decks/composition'
 import { present } from './support/present'
 import { archive, deckJson, editionArchive, MEDIA, sha256 } from './support/deck-archive'
 
@@ -205,4 +214,46 @@ void test('checker issues are shown without the workspace path, with their line,
   assert.equal(issues.length, 101)
   assert.match(issues.at(-1)?.message ?? '', /and 22 more errors/)
   await ws.dispose()
+})
+
+void test('HUB_DATA_DIR is made absolute', () => {
+  assert.equal(hubDataDir({ HUB_DATA_DIR: 'storage/hub' }), join(process.cwd(), 'storage/hub'))
+  assert.throws(() => hubDataDir({}))
+})
+
+void test('a deck.json over the limit is refused before it is read', async () => {
+  assert.equal(MAX_DECK_JSON_BYTES, 52_428_800)
+  const dir = await dataDir()
+  const body = JSON.stringify(deckJson())
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: upload(await editionArchive(deckJson())),
+    checker: fakeChecker().checker,
+    maxDeckJsonBytes: Buffer.byteLength(body) - 1,
+  })
+  await ws.receive()
+  const issues = await ws.unpack('en')
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0]?.where, 'deck.json')
+  assert.match(present(issues[0]).message, /at most/)
+  await ws.dispose()
+  assert.deepEqual(await readdir(join(dir, 'tmp')), [])
+})
+
+void test('a body the client stops sending is an aborted upload, and is cleaned up', async () => {
+  const dir = await dataDir()
+  const body = new Readable({ read: () => undefined })
+  body.on('error', () => undefined) // as the route does
+  body.push(Buffer.alloc(1000, 1))
+  setImmediate(() => body.destroy(Object.assign(new Error('aborted'), { code: 'ECONNRESET' })))
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: { body, declaredLength: null },
+    checker: fakeChecker().checker,
+  })
+  await assert.rejects(ws.receive(), UploadAborted)
+  await ws.dispose()
+  assert.deepEqual(await readdir(join(dir, 'tmp')), [])
 })
