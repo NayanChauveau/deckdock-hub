@@ -1,5 +1,3 @@
-import { sha256Hex } from './sha256'
-
 /** Recognisable by secret scanners. */
 export const TOKEN_PREFIX = 'ddk_'
 const TOKEN_BYTES = 32
@@ -19,22 +17,28 @@ function base64url(bytes: Uint8Array): string {
   return out
 }
 
-/** What is stored in place of a token: the sha256 of the whole token string, in hexadecimal. */
-export const hashToken = (token: string): string => sha256Hex(token)
+/**
+ * What is stored in place of a token: the sha256 of the whole token string, in hexadecimal.
+ * Injected (node:crypto in composition.ts): the domain imports no runtime module.
+ */
+export type TokenHasher = (token: string) => string
 
 /** A token of the shape `newPublishToken` produces; anything else is refused without a lookup. */
 export const isPublishTokenFormat = (token: string): boolean => TOKEN_FORMAT.test(token)
 
 /**
  * A new publish token: `ddk_` and 32 random bytes in base64url. The caller shows `token` once and
- * keeps only `hash`. `random` is the source of secure random bytes (injected: the domain has none).
+ * keeps only `hash`. `random` (secure random bytes) and `hash` are injected: the domain has none.
  */
-export function newPublishToken(random: (n: number) => Uint8Array): {
+export function newPublishToken(
+  random: (n: number) => Uint8Array,
+  hash: TokenHasher,
+): {
   token: string
   hash: string
 } {
   const bytes = random(TOKEN_BYTES)
   if (bytes.length !== TOKEN_BYTES) throw new Error('random must return the requested bytes')
   const token = TOKEN_PREFIX + base64url(bytes)
-  return { token, hash: hashToken(token) }
+  return { token, hash: hash(token) }
 }

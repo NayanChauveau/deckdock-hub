@@ -1,7 +1,7 @@
 import { DecksError } from '../domain/errors'
 import { validateDeckId, validateHandle } from '../domain/handle'
 import type { Author, Deck, RecordId } from '../domain/model'
-import { hashToken, isPublishTokenFormat, newPublishToken } from '../domain/token'
+import { isPublishTokenFormat, newPublishToken } from '../domain/token'
 import type { DecksDeps } from './ports'
 
 export type { DecksDeps, DecksStore } from './ports'
@@ -45,7 +45,7 @@ export async function createDeck(
   const valid = validateDeckId(deckId)
   if (!valid.ok) throw new DecksError('invalid_deck_id')
   if (await deps.store.deckOf(author.id, valid.value)) throw new DecksError('deck_exists')
-  const { token, hash } = newPublishToken(deps.random)
+  const { token, hash } = newPublishToken(deps.random, deps.hash)
   const deck = await deps.store.createDeck(author.id, valid.value, hash)
   return { deck, token }
 }
@@ -57,7 +57,7 @@ export async function regenerateToken(
   deckId: string,
 ): Promise<string> {
   const deck = await ownDeck(deps, customerId, deckId)
-  const { token, hash } = newPublishToken(deps.random)
+  const { token, hash } = newPublishToken(deps.random, deps.hash)
   await deps.store.setTokenHash(deck.id, hash)
   return token
 }
@@ -79,7 +79,7 @@ export async function revokeToken(
  */
 export async function deckForToken(deps: DecksDeps, token: string): Promise<Deck | null> {
   if (!isPublishTokenFormat(token)) return null
-  const deck = await deps.store.deckByTokenHash(hashToken(token))
+  const deck = await deps.store.deckByTokenHash(deps.hash(token))
   if (!deck) return null
   const at = deps.clock()
   await deps.store.touchToken(deck.id, at)

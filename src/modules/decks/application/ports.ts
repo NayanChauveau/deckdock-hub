@@ -1,5 +1,6 @@
 import type { DeckId, Handle } from '../domain/handle'
 import type { Author, Deck, RecordId } from '../domain/model'
+import type { TokenHasher } from '../domain/token'
 
 /**
  * Where authors and decks live. Uniqueness (one author per customer, one handle, one `deckId` per
@@ -23,5 +24,7 @@ export interface DecksDeps {
   store: DecksStore
   /** Secure random bytes. */
   random: (n: number) => Uint8Array
+  /** sha256 hex of a token string. */
+  hash: TokenHasher
   clock: () => Date
 }
