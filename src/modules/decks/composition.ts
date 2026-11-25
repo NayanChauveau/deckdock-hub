@@ -6,10 +6,12 @@ import { editionWorkspace, type Upload } from './adapters/files/workspace'
 import { windowRateLimiter } from './adapters/http/rate-limit'
 import { semaphore } from './adapters/http/semaphore'
 import { payloadPublishStore } from './adapters/payload/publish-store'
+import { payloadServeStore } from './adapters/payload/serve-store'
 import { payloadDecksStore } from './adapters/payload/store'
 import { pythonChecker } from './adapters/python/checker'
 import type { DecksDeps } from './application/ports'
 import type { PublishDeps } from './application/publish'
+import type { ServeDeps } from './application/serve'
 
 /** sha256 of a string's UTF-8 bytes, in lowercase hexadecimal (the stored token hash). */
 export const sha256Hex = (text: string): string =>
@@ -77,3 +79,9 @@ export const publishDeps = (payload: Payload): PublishDeps<Upload> => {
     clock: () => new Date(),
   }
 }
+
+/** Serving published decks (`/d/<handle>/<deck-id>/…`): public reads, hashed index.json. */
+export const serveDeps = (payload: Payload): ServeDeps => ({
+  store: payloadServeStore(payload),
+  hash: sha256Hex,
+})

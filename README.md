@@ -88,6 +88,31 @@ l’Action DeckDock). La réponse est toujours du JSON :
 - La date de dernière utilisation du jeton n’est notée qu’après la limite de débit et le contrôle
   du deck masqué.
 
+## Service au plugin
+
+Chaque deck est servi dans la structure « Publishing layout » du format, sous
+`<base>` = `https://<domaine>/d/<pseudo>/<deck-id>` : `<base>/index.json` (`deckdock-index/1`,
+construit à partir de la dernière version de chaque édition, trié par édition, écrit comme
+`make_index.py` du template), `<base>/<édition>/deck.json` et `<base>/<édition>/media/<fichier>`
+(nom en encodage pourcentage). L’apprenant colle `<base>/<édition>/` dans le plugin.
+
+- `ETag` = sha256 des octets servis, 304 sur `If-None-Match` (liste, `*`, comparaison faible).
+  `Cache-Control: public, max-age=300` pour `index.json` et `deck.json`, `public,
+  max-age=31536000, immutable` pour les médias. Pas de requêtes partielles (`Range`).
+- Les fichiers sont lus en flux depuis `HUB_DATA_DIR/blobs`. Un média est cherché exactement sous
+  `media/<nom>` dans la liste des fichiers de la version : aucun chemin n’est construit à partir de
+  l’adresse.
+- Médias : type déduit de l’extension par une liste fermée (images, son, vidéo, polices, CSS, JSON,
+  texte), sinon `application/octet-stream`, jamais `text/html`. CSP `default-src 'none'; sandbox`
+  (posée aussi dans `next.config.mjs`, dont les en-têtes l’emportent sur ceux de la route),
+  `nosniff` et `Content-Disposition: inline; filename*=UTF-8''…`.
+- Deck en attente : servi avec `X-Robots-Tag: noindex`. Deck masqué : 410. Pseudo, deck, édition ou
+  fichier inconnus : 404, la même réponse JSON minimale dans tous les cas.
+- Comme la publication, ce service reste ouvert pendant la maintenance : un auteur teste son deck
+  avant l’ouverture du site.
+- Le test HTTP lance le vrai code du plugin (`deckdock/addon`, dépôt cloné à côté, ou
+  `DECKDOCK_ADDON_SRC`) contre le serveur de test ; sans ce dépôt, il est sauté avec un message.
+
 ## Prérequis
 
 - Node.js 24 (`nvm use`, version de référence dans `.nvmrc`).

@@ -118,11 +118,15 @@
       "files": [
         "src/modules/decks/**",
         "src/app/(frontend)/api/publish/[edition]/route.ts",
+        "src/app/(frontend)/d/[handle]/[deck]/[...path]/route.ts",
+        "tests/decks.addon.test.py",
         "tests/decks.domain.test.ts",
         "tests/decks.files.test.ts",
         "tests/decks.http.ts",
         "tests/decks.integration.ts",
         "tests/decks.publish.test.ts",
+        "tests/decks.serve.http.ts",
+        "tests/decks.serve.test.ts",
         "tests/decks.workspace.test.ts",
         "tests/support/deck-archive.ts",
         "tests/support/in-memory-decks.ts"
