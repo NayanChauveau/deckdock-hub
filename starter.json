@@ -111,6 +111,17 @@
         "tests/e2e/accounts.spec.ts"
       ]
     },
+    "decks": {
+      "requires": ["accounts"],
+      "module": "decks",
+      "migrations": ["20261125_224245_decks"],
+      "files": [
+        "src/modules/decks/**",
+        "tests/decks.domain.test.ts",
+        "tests/decks.integration.ts",
+        "tests/support/in-memory-decks.ts"
+      ]
+    },
     "customer-uploads": {
       "requires": ["core"],
       "module": "customer-uploads",

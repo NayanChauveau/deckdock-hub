@@ -251,6 +251,7 @@ try {
         'socle',
         'commerce',
         'accounts',
+        'decks',
         'accounts_http',
         'migration',
         'public',
@@ -306,6 +307,12 @@ try {
       await payload(['run', 'tests/accounts.integration.ts'], withoutTotp(environment('accounts')))
     },
     ['tests/accounts.integration.ts'],
+  )
+  await stage(
+    'database',
+    'Intégration decks : pseudos, decks, jetons de publication, accès et versions immuables',
+    () => payload(['run', 'tests/decks.integration.ts'], withoutTotp(environment('decks'))),
+    ['tests/decks.integration.ts'],
   )
   await stage('database', 'Migrations : base vide migrée, aucune migration en attente', () =>
     payload(['run', 'tests/migrations.integration.ts'], environment('migration')),
