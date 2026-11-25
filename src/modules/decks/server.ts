@@ -1,10 +1,14 @@
 import type { Payload } from 'payload'
+import type { Upload } from './adapters/files/workspace'
 import * as useCases from './application/decks'
-import { decksDeps } from './composition'
+import * as publishUseCase from './application/publish'
+import type { PublishResult } from './application/publish'
+import { decksDeps, publishDeps } from './composition'
 import type { Author, Deck, RecordId } from './domain/model'
 
 export { DecksError, type DecksErrorCode } from './domain/errors'
 export type { Author, Deck, RecordId } from './domain/model'
+export type { PublishBody, PublishResult } from './application/publish'
 
 /** The decks use cases bound to the site's adapters, for routes, pages and hooks. */
 export const chooseHandle = (
@@ -30,3 +34,9 @@ export const revokeToken = (
 ): Promise<void> => useCases.revokeToken(decksDeps(payload), customerId, deckId)
 export const deckForToken = (payload: Payload, token: string): Promise<Deck | null> =>
   useCases.deckForToken(decksDeps(payload), token)
+
+/** Publishes one compiled edition sent by a deck's CI (`POST /api/publish/<edition>`). */
+export const publishEdition = (
+  payload: Payload,
+  input: { token: string; edition: string; archive: Upload },
+): Promise<PublishResult> => publishUseCase.publishEdition(publishDeps(payload), input)

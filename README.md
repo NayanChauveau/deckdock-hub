@@ -51,6 +51,33 @@ deck invalide écrits sur `/data/hub`, deck toujours présent après la recréat
 sauvegarde faite avant chaque déploiement, ni la sauvegarde de la nuit d’infra-traefik ne le
 contiennent encore.
 
+## API de publication
+
+`POST /api/publish/<édition>` (module `decks`) reçoit l’archive `tar.gz` d’une édition compilée,
+envoyée par la CI d’un auteur avec `Authorization: Bearer <jeton du deck>` (commande `publish` de
+l’Action DeckDock). La réponse est toujours du JSON :
+`{"status", "version", "notes", "warnings": [...], "errors": [{"where", "message"}]}`, avec
+`status` = `published`, `already_published`, `pending_review` ou `rejected`.
+
+- Contrôles, dans l’ordre : jeton (401), limite par deck (429, `Retry-After`), deck masqué (410),
+  édition de l’adresse (422), taille (413), décompression sûre et disposition `deck.json` +
+  `media/<fichier>` (422), `deckdock check --non-strict` (422, une erreur par ligne), `deck.id` et
+  `deck.edition` (409), version `dev` (422), version déjà reçue (200 `already_published` si mêmes
+  fichiers, sinon 409), `deckdock compat` avec la dernière version (409 si cassant, avertissement
+  si un champ est ajouté à la fin). Puis les fichiers vont dans `HUB_DATA_DIR/blobs`, et
+  l’édition, la version et la dernière version sont écrites dans une seule transaction.
+- L’envoi est copié dans `HUB_DATA_DIR/tmp/publish-<uuid>`, toujours supprimé ensuite. Taille
+  maximale : `HUB_MAX_UPLOAD_BYTES`, sinon `modules.decks.maxUploadBytes` (100 Mo).
+- Le vérificateur est lancé par `HUB_PYTHON` (par défaut `python3`), Python 3.13 au moins, avec la
+  bibliothèque sur `PYTHONPATH` (`/opt/deckdock` dans l’image, `vendor/deckdock` en local), sans
+  les secrets du site dans son environnement. Les tests trouvent `python3.14`, `python3.13` ou
+  `python3` s’il est assez récent (ou `HUB_PYTHON`) ; la CI installe Python 3.13 pour le groupe `web`.
+- Limites de débit : 30 envois par deck et par 10 minutes dans l’application (en mémoire, par
+  processus : un redémarrage la remet à zéro), et 30 par minute et par IP (rafale 10) par le
+  routeur Traefik `-publish`, distinct du routeur `-auth` (5 par minute) pour qu’une CI publie
+  plusieurs éditions d’affilée.
+- La maintenance du site ne bloque pas la publication : les auteurs publient avant l’ouverture.
+
 ## Prérequis
 
 - Node.js 24 (`nvm use`, version de référence dans `.nvmrc`).
