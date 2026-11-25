@@ -49,6 +49,8 @@ Object.assign(base, {
   NEXT_DIST_DIR: build,
   NEXT_TSCONFIG_PATH: `.test-tsconfig-${id}.json`,
   MEDIA_DIR: join(directory, 'media'),
+  // DeckDock hub: uploaded decks (/data/hub in production).
+  HUB_DATA_DIR: join(directory, 'hub'),
   APP_URL: 'http://127.0.0.1:3201',
   DATABASE_URL: 'postgresql://build:build@127.0.0.1:1/build_test',
 })

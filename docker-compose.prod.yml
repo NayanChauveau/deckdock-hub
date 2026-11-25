@@ -38,12 +38,15 @@ services:
       <<: *app-env
       JOBS_AUTORUN: 'true'
       PORT: ${SITE_PORT:?SITE_PORT requis}
+      # DeckDock hub: uploaded decks and their checked editions (hub-files volume below).
+      HUB_DATA_DIR: /data/hub
     restart: unless-stopped
     mem_limit: 1536m
     pids_limit: 256
     # Hardening: no privilege gain, no capability, read-only filesystem (the code also belongs to
-    # root, see Dockerfile). Writable: the media volume, and in memory the deploy's drain flag
-    # (/tmp/draining, deploy/release.py) and the Next.js caches, rebuilt after a restart.
+    # root, see Dockerfile). Writable: the media volume, the hub's files (/data/hub, DeckDock), and
+    # in memory the deploy's drain flag (/tmp/draining, deploy/release.py) and the Next.js caches,
+    # rebuilt after a restart.
     security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
     read_only: true
@@ -51,6 +54,9 @@ services:
       - /tmp:size=64m,mode=1777
       - /app/.next/cache:size=64m,uid=1001,gid=1001,mode=0700
       - /app/.next/server/route-cache:size=64m,uid=1001,gid=1001,mode=0700
+    volumes:
+      - media:/app/storage/media
+      - hub-files:/data/hub
     networks: [internal, traefik]
     depends_on:
       postgres:
@@ -207,3 +213,6 @@ volumes:
   media:
     external: true
     name: ${SITE_VOLUME_MEDIA:?SITE_VOLUME_MEDIA requis}
+  # DeckDock hub: uploaded decks (HUB_DATA_DIR). Managed by compose (<project>_hub-files), outside
+  # the deploy kit's volume list: see README, « Écarts avec l’image du starter ».
+  hub-files:

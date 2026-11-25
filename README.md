@@ -1,21 +1,49 @@
-# Site starter
+# DeckDock hub
 
-Point de départ des sites du même modèle : Next.js, TypeScript, Payload CMS et PostgreSQL,
-déployés sur le VPS par GitHub Actions avec le kit de déploiement commun (`deploy/`).
+Le hub de DeckDock : le site où l’on publie et retrouve des decks Anki au format `deckdock/1`.
+Il est créé à partir du starter de sites (Next.js, TypeScript, Payload CMS et PostgreSQL, déployés
+sur le VPS par GitHub Actions avec le kit de déploiement commun, `deploy/`), avec le module
+`accounts` (comptes visiteurs). Les valeurs propres au site sont dans `site.config.json` : slug
+`deckdock-hub`, port 3400, langues `fr` et `en`. Le domaine n’est pas encore choisi :
+`deckdock-hub.invalid` est un remplaçant, à changer dans `site.config.json` (`identity.domain`,
+`deploy.defaultHost`) avant le premier déploiement. Voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Le dépôt contient le **socle** (`src/core`), des **modules** optionnels (`src/modules` : commandes,
-paiement Stripe, envois de fichiers clients, suggestions d’adresses) et une couche **site**
-d’exemple (`src/site`) à remplacer. Toutes les valeurs propres au site (nom, domaine, port,
-préfixe des références, déploiement) sont dans `site.config.json`, avec des valeurs d’exemple :
-`example`, `Example`, `example.invalid`, port 3300, préfixe `EX`. Voir
-[ARCHITECTURE.md](ARCHITECTURE.md).
+**Création et suite** : [STARTER.md](STARTER.md) (registre d’infra-traefik, secrets, premier
+déploiement). **Mise à jour depuis le starter** : `pnpm starter:update`, en fusion à trois voies,
+sans rien committer ([STARTER.md](STARTER.md), « Mettre à jour un site depuis le starter »).
 
-**Nouveau site** : suivre [STARTER.md](STARTER.md) (`scripts/init-site.mjs` crée un site sans
-module, `pnpm starter:add <module>` en ajoute, registre d’infra-traefik, premier déploiement).
+## Écarts avec l’image du starter
 
-**Mise à jour depuis le starter** : `pnpm starter:update` récupère les changements du starter pour
-les briques du site (`.starter.json`), en fusion à trois voies, sans rien committer
-([STARTER.md](STARTER.md), « Mettre à jour un site depuis le starter »).
+L’image `production` du starter ne contient que Node.js et le serveur Next.js, dans un conteneur
+en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés :
+
+- **Python et le vérificateur `deckdock`.** Le hub lance `python3 -m deckdock check --non-strict
+  --json <dossier>` et `python3 -m deckdock compat <précédent> <nouveau> --json`. La bibliothèque
+  demande Python 3.13, que Debian bookworm (la base Node du starter) ne fournit pas : l’interpréteur
+  et sa bibliothèque standard sont copiés de l’image officielle `python:3.13.x-slim-bookworm`
+  (même version de Debian, version et empreinte épinglées dans le `Dockerfile`), sans pip ni
+  ensurepip, IDLE ou Tk. Rien n’est téléchargé avec pip ; l’image `ops` n’a pas Python.
+- **La bibliothèque est copiée dans le dépôt** (`vendor/deckdock`), pas récupérée au build : le
+  build reste hors ligne. `node scripts/vendor-deckdock.mjs` la recopie depuis le dépôt voisin
+  `../deckdock` (`cli/src/deckdock`, fichiers `.py` et `py.typed` seulement) et note le commit
+  source dans `vendor/deckdock/SOURCE` ; relancer puis committer pour la mettre à jour. Dans
+  l’image, elle est dans `/opt/deckdock` (`PYTHONPATH=/opt/deckdock`), compilée au build, et
+  appartient à root.
+- **Un volume en écriture, `hub-files`, monté sur `/data/hub`** (`HUB_DATA_DIR`) : les decks
+  envoyés et leurs éditions. Le conteneur `web` reste en lecture seule (`read_only: true`) ; il
+  n’écrit que sur ce volume, le volume des médias et les tmpfs du starter. Le dossier appartient à
+  l’utilisateur 1001 (un nouveau volume prend son propriétaire). En test, `HUB_DATA_DIR` désigne un
+  dossier temporaire.
+
+Le smoke des images (`python3 deploy/smoke.py`, extension `deploy/smoke_site.py`) le vérifie sur
+l’image construite : version de `deckdock`, absence de pip, vérification d’un deck valide et d’un
+deck invalide écrits sur `/data/hub`, deck toujours présent après la recréation des conteneurs.
+`tests/test_hub_image.py` relit le `Dockerfile` et `docker-compose.prod.yml`.
+
+**À régler avant le premier déploiement** : le volume `hub-files` est géré par compose
+(`deckdock-hub-prod_hub-files`), hors de la liste des volumes du kit de déploiement : ni la
+sauvegarde faite avant chaque déploiement, ni la sauvegarde de la nuit d’infra-traefik ne le
+contiennent encore.
 
 ## Prérequis
 
@@ -57,12 +85,13 @@ déploiement (`tests/admin-access.test.ts`). Retirer la ligne pour tester l’en
 Pas à pas, sans le script : `cp .env.example .env.local` (puis `PAYLOAD_SECRET` remplacé par
 `openssl rand -hex 48`), `pnpm db:start`, `pnpm db:migrate`, `pnpm db:seed`, `pnpm dev`.
 
-- Site : http://localhost:3300 (redirige vers `/fr`)
-- Administration : http://localhost:3300/admin
-- État de la connexion BDD : http://localhost:3300/api/health
+- Site : http://localhost:3400 (redirige vers `/fr`)
+- Administration : http://localhost:3400/admin
+- État de la connexion BDD : http://localhost:3400/api/health
 
-PostgreSQL écoute sur `127.0.0.1:5434` (base `example_dev`, identifiants de développement
-uniquement). `pnpm db:stop` arrête la base sans supprimer ses données ; éviter
+PostgreSQL écoute sur `127.0.0.1:5435` (base `deckdock_hub_dev`, identifiants de développement
+uniquement ; 5434 est le port du starter, pour que les deux tournent en même temps). `pnpm db:stop`
+arrête la base sans supprimer ses données ; éviter
 `docker compose down -v`, qui efface le volume.
 
 `pnpm db:seed` remplit les contenus absents (accueil, réglages, pages légales avec des textes

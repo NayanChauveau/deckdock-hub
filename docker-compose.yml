@@ -1,17 +1,17 @@
-name: example
+name: deckdock-hub
 services:
   postgres:
     image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
     environment:
-      POSTGRES_DB: example_dev
-      POSTGRES_USER: example
-      POSTGRES_PASSWORD: example_local_only
+      POSTGRES_DB: deckdock_hub_dev
+      POSTGRES_USER: deckdock_hub
+      POSTGRES_PASSWORD: deckdock_hub_local_only
     ports:
-      - '127.0.0.1:5434:5432'
+      - '127.0.0.1:5435:5432'
     volumes:
       - pgdata18:/var/lib/postgresql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U example -d example']
+      test: ['CMD-SHELL', 'pg_isready -U deckdock_hub -d deckdock_hub']
       interval: 2s
       timeout: 5s
       retries: 15
