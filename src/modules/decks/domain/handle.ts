@@ -17,6 +17,7 @@ export const RESERVED_HANDLES: readonly string[] = Object.freeze([
 ])
 
 // The format's slug rule (deckdock `SLUG_RE`): lowercase letters, digits and single dashes.
+// Handles use this slug form (no consecutive dashes), deliberately stricter than a plain 3–30 regex.
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 /**

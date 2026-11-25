@@ -8,12 +8,10 @@ import {
 } from '../src/modules/decks/domain/handle'
 import { canTransition, DECK_STATUSES } from '../src/modules/decks/domain/status'
 import {
-  hashToken,
   isPublishTokenFormat,
   newPublishToken,
   TOKEN_PREFIX,
 } from '../src/modules/decks/domain/token'
-import { sha256Hex } from '../src/modules/decks/domain/sha256'
 import {
   chooseHandle,
   createDeck,
@@ -23,10 +21,12 @@ import {
   type DecksDeps,
 } from '../src/modules/decks/application/decks'
 import { DecksError } from '../src/modules/decks/domain/errors'
+import { sha256Hex } from '../src/modules/decks/composition'
 import { inMemoryDecksStore } from './support/in-memory-decks'
 import { present } from './support/present'
 
 const random = (n: number) => new Uint8Array(randomBytes(n))
+const hash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 
 void test('valid handles are accepted, normalised to lowercase', () => {
   for (const handle of ['abc', 'alice', 'a-b-c', 'deck42', 'x'.repeat(30), '0-1']) {
@@ -83,32 +83,24 @@ void test('status transitions', () => {
   assert.ok(!canTransition('hidden', 'pending'))
 })
 
-void test('the pure sha256 matches node:crypto', () => {
-  for (const input of [
-    '',
-    'abc',
-    'ddk_x',
-    'é€😀',
-    'a'.repeat(55),
-    'b'.repeat(64),
-    'c'.repeat(1000),
-  ])
-    assert.equal(sha256Hex(input), createHash('sha256').update(input, 'utf8').digest('hex'), input)
-})
-
 void test('a publish token is prefixed, long, random, and only its hash is kept', () => {
-  const { token, hash } = newPublishToken(random)
+  const { token, hash: stored } = newPublishToken(random, hash)
   assert.ok(token.startsWith(TOKEN_PREFIX))
   assert.equal(TOKEN_PREFIX, 'ddk_')
   assert.ok(token.length >= 47, String(token.length))
   assert.match(token, /^ddk_[A-Za-z0-9_-]{43}$/)
-  assert.match(hash, /^[0-9a-f]{64}$/)
-  assert.ok(!hash.includes(token))
-  assert.ok(!hash.includes(token.slice(TOKEN_PREFIX.length)))
-  assert.equal(hash, createHash('sha256').update(token).digest('hex'))
-  assert.equal(hashToken(token), hash)
-  assert.notEqual(newPublishToken(random).token, token)
+  assert.match(stored, /^[0-9a-f]{64}$/)
+  assert.ok(!stored.includes(token))
+  assert.ok(!stored.includes(token.slice(TOKEN_PREFIX.length)))
+  assert.equal(stored, hash(token), 'the injected hasher of the whole token')
+  assert.notEqual(newPublishToken(random, hash).token, token)
   assert.ok(isPublishTokenFormat(token))
+})
+
+void test('the composition hashes tokens with sha256 hex of the whole token string', () => {
+  const { token, hash: stored } = newPublishToken(random, sha256Hex)
+  assert.equal(stored, createHash('sha256').update(token, 'utf8').digest('hex'))
+  assert.equal(sha256Hex('é'), createHash('sha256').update('é', 'utf8').digest('hex'))
 })
 
 void test('the token encodes 32 random bytes in base64url without padding', () => {
@@ -117,7 +109,7 @@ void test('the token encodes 32 random bytes in base64url without padding', () =
   const { token } = newPublishToken((n) => {
     asked.push(n)
     return bytes
-  })
+  }, hash)
   assert.deepEqual(asked, [32])
   assert.equal(token, `ddk_${Buffer.from(bytes).toString('base64url')}`)
 })
@@ -141,6 +133,7 @@ function deps(): DecksDeps & { store: ReturnType<typeof inMemoryDecksStore> } {
   return {
     store: inMemoryDecksStore(),
     random,
+    hash,
     clock: () => new Date((now += 1000)),
   }
 }

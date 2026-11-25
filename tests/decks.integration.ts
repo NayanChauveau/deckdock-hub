@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { makeSignature } from 'better-auth/crypto'
 import { getPayload, handleEndpoints } from 'payload'
 import config from '../src/payload.config'
@@ -13,7 +13,6 @@ import {
   revokeToken,
 } from '../src/modules/decks/server'
 import { payloadDecksStore } from '../src/modules/decks/adapters/payload/store'
-import { hashToken } from '../src/modules/decks/domain/token'
 import type { DeckId } from '../src/modules/decks/domain/handle'
 import { present } from './support/present'
 
@@ -24,6 +23,8 @@ if (!new URL(connectionString).pathname.endsWith('_test'))
   throw new Error('Base isolée _test requise.')
 const appURL = present(process.env['APP_URL'])
 const payload = await getPayload({ config })
+// Independent of the module: the stored hash must be the sha256 hex of the whole token string.
+const hashToken = (token: string) => createHash('sha256').update(token, 'utf8').digest('hex')
 
 const field = (value: unknown, key: string): unknown =>
   typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
