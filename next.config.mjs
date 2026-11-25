@@ -69,6 +69,13 @@ export default withPayload({
           },
         ],
       },
+      // DeckDock hub (decks module): published decks and their media, served to the add-on
+      // (src/modules/decks/adapters/http/serve-route.ts). A header set here wins over the route's
+      // own, so the media policy is set here: an SVG or HTML file of a deck never runs.
+      {
+        source: '/d/:path*',
+        headers: [{ key: 'Content-Security-Policy', value: "default-src 'none'; sandbox" }],
+      },
       {
         source: '/:locale/commande/acces',
         headers: [noindex, { key: 'Referrer-Policy', value: 'no-referrer' }],

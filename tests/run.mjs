@@ -403,7 +403,7 @@ try {
   )
   await stage(
     'web',
-    'API de publication des decks : jetons, archives, vérificateur, versions (build de production)',
+    'Decks : API de publication, service au plugin et plugin réel (build de production)',
     async () => {
       const env = {
         ...environment('decks_http'),
@@ -413,11 +413,16 @@ try {
         HUB_PYTHON: await hubPython(),
         PYTHONPATH: resolve('vendor/deckdock'),
       }
-      await withServer('start', env, (env) =>
-        payload(['run', 'tests/decks.http.ts'], withoutTotp(env)),
-      )
+      await withServer('start', env, async (env) => {
+        await payload(['run', 'tests/decks.http.ts'], withoutTotp(env))
+        // Reads back what it publishes, then runs deckdock/addon (../deckdock) when present.
+        const addon = resolve(base.DECKDOCK_ADDON_SRC || '../deckdock/addon/src')
+        if (!existsSync(join(addon, 'deckdock_addon', 'sources.py')))
+          console.log(`  SKIP test réel du plugin : ${addon} absent (dépôt deckdock à côté)`)
+        await payload(['run', 'tests/decks.serve.http.ts'], withoutTotp(env))
+      })
     },
-    ['tests/decks.http.ts'],
+    ['tests/decks.http.ts', 'tests/decks.serve.http.ts', 'tests/decks.addon.test.py'],
   )
   await stage(
     'web',
