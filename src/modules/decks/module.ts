@@ -11,10 +11,15 @@ export const decksModule: SiteModule = {
   dependsOn: ['accounts'],
   collections: [Authors, Decks, Editions, Versions],
   migrations: ['20261125_224245_decks'],
+  routes: ['src/app/(frontend)/api/publish/[edition]/route.ts'],
   files: [
     'tests/decks.domain.test.ts',
     'tests/decks.files.test.ts',
+    'tests/decks.http.ts',
     'tests/decks.integration.ts',
+    'tests/decks.publish.test.ts',
+    'tests/decks.workspace.test.ts',
+    'tests/support/deck-archive.ts',
     'tests/support/in-memory-decks.ts',
   ],
 }

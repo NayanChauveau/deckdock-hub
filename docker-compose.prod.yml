@@ -111,6 +111,18 @@ services:
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.average=5'
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.period=1m'
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.burst=5'
+      # DeckDock hub: deck publishing from authors' CI (POST /api/publish/<edition>), the costliest
+      # call (archive, checker). Its own per-IP bucket, not the auth one: a CI run publishes several
+      # editions in a row from one runner. The app also limits per deck token.
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST requis}`) && PathPrefix(`/api/publish/`)'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.priority=1000'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.entrypoints=websecure'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.tls.certresolver=le'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.service=${SITE_TRAEFIK_NAME}'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.middlewares=${SITE_TRAEFIK_NAME}-noindex,${SITE_TRAEFIK_NAME}-publish-ratelimit'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.average=30'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.period=1m'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.burst=10'
 
   postgres:
     image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015

@@ -48,5 +48,35 @@ class AuthRateLimitTest(unittest.TestCase):
         self.assertNotIn('PathPrefix(`/api/auth`)', rule)
 
 
+class PublishRateLimitTest(unittest.TestCase):
+    """DeckDock hub: deck publishing has its own router and per-IP bucket, never the auth one."""
+
+    def label(self, key: str) -> str:
+        text = COMPOSE.read_text(encoding='utf-8')
+        match = re.search(re.escape('traefik.http.' + key + '=') + r"(.+)'", text)
+        self.assertIsNotNone(match, key)
+        return match.group(1)
+
+    def test_publish_router_has_its_own_rate_limit(self):
+        router = 'routers.${SITE_TRAEFIK_NAME}-publish'
+        self.assertIn('PathPrefix(`/api/publish/`)', self.label(f'{router}.rule'))
+        self.assertIn('Host(`${TRAEFIK_HOST', self.label(f'{router}.rule'))
+        self.assertEqual(self.label(f'{router}.priority'), '1000')
+        self.assertEqual(self.label(f'{router}.entrypoints'), 'websecure')
+        self.assertEqual(self.label(f'{router}.tls.certresolver'), 'le')
+        self.assertEqual(
+            self.label(f'{router}.middlewares'),
+            '${SITE_TRAEFIK_NAME}-noindex,${SITE_TRAEFIK_NAME}-publish-ratelimit',
+        )
+        limit = 'middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit'
+        self.assertEqual(self.label(f'{limit}.average'), '30')
+        self.assertEqual(self.label(f'{limit}.period'), '1m')
+        self.assertEqual(self.label(f'{limit}.burst'), '10')
+
+    def test_publish_is_not_in_the_auth_bucket(self):
+        text = COMPOSE.read_text(encoding='utf-8')
+        auth_rule = re.search(r'routers\.\$\{SITE_TRAEFIK_NAME\}-auth\.rule=(.+)', text).group(1)
+        self.assertNotIn('/api/publish', auth_rule)
+
 if __name__ == '__main__':
     unittest.main()

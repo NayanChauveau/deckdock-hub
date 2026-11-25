@@ -168,6 +168,23 @@ async function withServer(mode, env, action) {
     await stop(server)
   }
 }
+/**
+ * The interpreter of the deckdock checker (Python >= 3.13, as in the image): HUB_PYTHON when set,
+ * otherwise the first of python3.14, python3.13 and python3 that is recent enough.
+ */
+async function hubPython() {
+  const candidates = [base.HUB_PYTHON, 'python3.14', 'python3.13', 'python3'].filter(Boolean)
+  for (const candidate of candidates) {
+    try {
+      await capture(candidate, [
+        '-c',
+        'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)',
+      ])
+      return candidate
+    } catch {}
+  }
+  throw new Error(`Python >= 3.13 introuvable (${candidates.join(', ')}) : définir HUB_PYTHON`)
+}
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => {
     interrupted = true
@@ -252,6 +269,7 @@ try {
         'commerce',
         'accounts',
         'decks',
+        'decks_http',
         'accounts_http',
         'migration',
         'public',
@@ -382,6 +400,24 @@ try {
       })
     },
     ['tests/accounts.http.ts', 'tests/accounts-admin.http.ts'],
+  )
+  await stage(
+    'web',
+    'API de publication des decks : jetons, archives, vérificateur, versions (build de production)',
+    async () => {
+      const env = {
+        ...environment('decks_http'),
+        HUB_DATA_DIR: join(directory, 'decks-hub'),
+        // Small enough to send a larger body quickly; the valid test archives weigh a few KiB.
+        HUB_MAX_UPLOAD_BYTES: String(1024 * 1024),
+        HUB_PYTHON: await hubPython(),
+        PYTHONPATH: resolve('vendor/deckdock'),
+      }
+      await withServer('start', env, (env) =>
+        payload(['run', 'tests/decks.http.ts'], withoutTotp(env)),
+      )
+    },
+    ['tests/decks.http.ts'],
   )
   await stage(
     'web',
