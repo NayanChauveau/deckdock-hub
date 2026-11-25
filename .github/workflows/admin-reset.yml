@@ -1,0 +1,33 @@
+name: Reset admin password
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Email du compte administrateur existant
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.repository }}-production
+  cancel-in-progress: false
+jobs:
+  reset:
+    if: github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      ADMIN_EMAIL: ${{ inputs.email }}
+      ADMIN_RESET_PASSWORD: ${{ secrets.ADMIN_RESET_PASSWORD }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Reset the password of an existing administrator
+        run: python3 deploy/admin_reset.py

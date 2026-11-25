@@ -1,0 +1,44 @@
+name: Performance
+# The Lighthouse budget (TESTING.md), out of the push checks: about 1 min 30 per run and slow to
+# set up, for a regression that rarely appears in a single push. Once a night, only when main got
+# a commit in the last day (GitHub Actions minutes count), or by hand from the Actions tab.
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - id: recent
+        # A manual run always measures; a scheduled one skips a main untouched for a day.
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          last="$(git log -1 --format=%ct)"
+          if [ "$EVENT" = workflow_dispatch ] || [ "$(( $(date +%s) - last ))" -lt 90000 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No commit on main in the last day: nothing to measure."
+          fi
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        if: steps.recent.outputs.run == 'true'
+        with:
+          version: 11.28.2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        if: steps.recent.outputs.run == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.recent.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - if: steps.recent.outputs.run == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.recent.outputs.run == 'true'
+        run: pnpm test --group=performance

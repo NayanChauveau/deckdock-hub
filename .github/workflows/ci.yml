@@ -1,0 +1,176 @@
+name: CI
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      publish:
+        description: Push the tested images to the registry (deploy.yml, when it deploys)
+        type: boolean
+        default: false
+    outputs:
+      image:
+        value: ${{ jobs.container.outputs.image }}
+      ops:
+        value: ${{ jobs.container.outputs.ops }}
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  changes:
+    # Which test groups this change needs (scripts/ci-changes.mjs): GitHub Actions minutes count.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      groups: ${{ steps.plan.outputs.groups }}
+      modules: ${{ steps.plan.outputs.modules }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # Push: since the last run of deploy.yml that passed every check. Pull request: its base.
+          # Manual run: no base, everything.
+          base=''
+          if [ "$EVENT" = push ]; then
+            base="$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main \
+              --status success --limit 1 --json headSha --jq '.[0].headSha // ""')"
+          elif [ "$EVENT" = pull_request ]; then
+            base="$PR_BASE"
+          fi
+          node scripts/ci-changes.mjs "$base" >> "$GITHUB_OUTPUT"
+  quality:
+    # Independent groups of `pnpm test`, run side by side; each one owns its database and server.
+    name: quality (${{ matrix.group }})
+    needs: changes
+    strategy:
+      fail-fast: true
+      matrix:
+        # static, database, web, browser; browser only when what a visitor gets may change. The
+        # Lighthouse budget runs in performance.yml (nightly when main changed, or by hand).
+        group: ${{ fromJSON(needs.changes.outputs.groups) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 11.28.2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Install Chromium for the browser tests
+        if: matrix.group == 'browser'
+        run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test --group=${{ matrix.group }}
+      - name: Generated types and import map are committed
+        if: matrix.group == 'static'
+        run: git diff --exit-code -- src/payload-types.ts 'src/app/(payload)/admin/importMap.js'
+  modules:
+    # A site may drop any optional module (pnpm module:remove): each removal, on a fresh checkout,
+    # still passes the static group (unit and architecture tests, generated types, tsc, eslint).
+    name: modules (sans ${{ matrix.module }})
+    # In the starter only (a site keeps the modules it uses), and only when a module, a page, a test
+    # or a script changes (scripts/ci-changes.mjs).
+    needs: changes
+    if: github.repository == 'NayanChauveau/site-starter' && needs.changes.outputs.modules == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: accounts
+            remove: accounts
+          - module: addresses
+            remove: addresses
+          - module: customer-uploads
+            remove: customer-uploads
+          - module: payments-stripe
+            remove: payments-stripe
+          # payments-stripe depends on orders: the removal names both, as the script requires.
+          - module: orders
+            remove: payments-stripe orders
+          # A new site starts bare (init-site without --modules): every module removed.
+          - module: aucun module
+            remove: accounts addresses customer-uploads payments-stripe orders
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 11.28.2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # Installed first: the removal script reads the TypeScript manifests through tsx.
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - run: pnpm module:remove ${{ matrix.remove }}
+      - run: pnpm test --group=static
+  container:
+    # Builds the images once: tested here, then published as is when deploy.yml asks for it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
+      ops: ${{ steps.publish.outputs.ops }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Validate GitHub Actions
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.7 -color
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          target: production
+          load: true
+          tags: app:ci
+          # One cache scope per target: a shared scope would keep only the last build's manifest.
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          target: ops
+          load: true
+          tags: app:ci-ops
+          cache-from: |
+            type=gha,scope=ops
+            type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=ops
+      - name: Test production images and persistence
+        env:
+          SMOKE_IMAGE: app:ci
+          SMOKE_OPS_IMAGE: app:ci-ops
+        run: python3 deploy/smoke.py
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: publish
+        # SHA-tagged: deploy.yml deploys it only once every job of this workflow has passed.
+        if: inputs.publish
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}"
+          docker tag app:ci "$image"
+          docker tag app:ci-ops "$image-ops"
+          docker push --quiet "$image"
+          docker push --quiet "$image-ops"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "ops=$image-ops" >> "$GITHUB_OUTPUT"

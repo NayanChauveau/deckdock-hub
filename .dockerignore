@@ -1,0 +1,21 @@
+.git
+.github
+node_modules
+.next
+.env*
+!.env.example
+storage
+*.tsbuildinfo
+.DS_Store
+deploy-input.json
+tests
+README.md
+.pnpm-store
+**/__pycache__
+**/*.pyc
+
+# Encrypted exports and local recovery work
+restore-work/
+
+.test-build/
+.test-tsconfig-*.json

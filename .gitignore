@@ -1,0 +1,24 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+
+# Fichier généré par Next.js (varie entre dev et build)
+next-env.d.ts
+
+# Médias persistants locaux
+storage/
+
+# Entrées et secrets de déploiement transitoires
+deploy-input.json
+.pnpm-store/
+__pycache__/
+*.pyc
+
+# Encrypted exports and local recovery work
+restore-work/
+
+.test-build/
+.test-tsconfig-*.json

@@ -1,0 +1,723 @@
+{
+  "steps": [
+    {
+      "render": [
+        "-f",
+        "docker-compose.prod.yml",
+        "--profile",
+        "operations",
+        "config",
+        "--format",
+        "json"
+      ]
+    },
+    {
+      "compose": ["up", "-d", "--wait", "--wait-timeout", "120", "postgres"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "media-init"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "data-check"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "migrate"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "migrate"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "bootstrap-admin"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "bootstrap-admin"],
+      "input": null
+    },
+    {
+      "compose": [
+        "run",
+        "--rm",
+        "-T",
+        "--no-deps",
+        "migrate",
+        "node",
+        "--import",
+        "tsx",
+        "node_modules/payload/bin.js",
+        "--disable-transpile",
+        "run",
+        "src/scripts/purge-test-data-ci.ts"
+      ],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "email-test"],
+      "input": "ea7537cc29e90b05"
+    },
+    {
+      "compose": ["up", "-d", "--wait", "--wait-timeout", "150", "web"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "id", "-u"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/app/.env.local"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/bin/npm"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/bin/corepack"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/pnpm"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/app/src"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/app/node_modules/tsx"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/app/node_modules/typescript"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/app/node_modules/drizzle-kit"],
+      "input": null
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "test",
+        "!",
+        "-e",
+        "/app/node_modules/.pnpm/node_modules/esbuild"
+      ],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "touch", "/tmp/draining-check"],
+      "input": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/fr",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/_next/static/chunks/app.js",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/site-icon.svg",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/admin/login",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/users/login",
+      "method": "POST",
+      "body": "d62fe82a295a0447",
+      "type": "application/json",
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/globals/order-settings",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": "payload-token=token"
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/setup-totp",
+      "method": "POST",
+      "body": "9bb8747da8e416e7",
+      "type": "application/json",
+      "cookie": "payload-token=token"
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "node",
+        "-e",
+        "require('sharp')({create:{width:4,height:4,channels:3,background:'#ccc6b5'}}).png().toBuffer().then(b=>process.stdout.write(b))"
+      ],
+      "input": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/media",
+      "method": "POST",
+      "body": "f5a6917c65efb57d",
+      "type": "multipart/form-data; boundary=smoke-00000000000000000000000000000000",
+      "cookie": "payload-token=token; payload-totp=second"
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/globals/site-settings",
+      "method": "POST",
+      "body": "2975204d6968c973",
+      "type": "application/json",
+      "cookie": "payload-token=token; payload-totp=second"
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/globals/site-content?locale=fr",
+      "method": "POST",
+      "body": "ad91dca5ce6dd9b0",
+      "type": "application/json",
+      "cookie": "payload-token=token; payload-totp=second"
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/fr",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/media/file/smoke.png",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["exec", "-T", "postgres", "pg_dump", "-U", "<db-user>", "-d", "<db-name>", "-Fc"],
+      "input": null
+    },
+    {
+      "compose": ["run", "--rm", "-T", "--no-deps", "media-backup"],
+      "input": null
+    },
+    {
+      "compose": ["stop", "web", "postgres"],
+      "input": null
+    },
+    {
+      "compose": ["up", "-d", "--force-recreate", "--wait", "--wait-timeout", "120", "postgres"],
+      "input": null
+    },
+    {
+      "compose": ["up", "-d", "--force-recreate", "--wait", "--wait-timeout", "150", "web"],
+      "input": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/fr",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/media/file/smoke.png",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/health",
+      "method": "GET",
+      "body": null,
+      "type": null,
+      "cookie": null
+    },
+    {
+      "compose": [
+        "run",
+        "--rm",
+        "-T",
+        "--no-deps",
+        "migrate",
+        "node",
+        "--import",
+        "tsx",
+        "node_modules/payload/bin.js",
+        "--disable-transpile",
+        "run",
+        "src/scripts/reset-admin-password-ci.ts"
+      ],
+      "input": "b835eac3ec160b71"
+    },
+    {
+      "compose": ["port", "web", "<port>"],
+      "input": null
+    },
+    {
+      "request": "/api/users/login",
+      "method": "POST",
+      "body": "b835eac3ec160b71",
+      "type": "application/json",
+      "cookie": null
+    },
+    {
+      "compose": ["down", "--volumes", "--remove-orphans"],
+      "input": null
+    }
+  ],
+  "compose": {
+    "name": "<slug>-ci-000000000000",
+    "networks": {
+      "internal": {
+        "name": "<slug>-ci-000000000000-internal"
+      },
+      "traefik": {
+        "name": "<slug>-ci-000000000000-traefik"
+      }
+    },
+    "services": {
+      "bootstrap-admin": {
+        "profiles": ["operations"],
+        "command": [
+          "node",
+          "--import",
+          "tsx",
+          "node_modules/payload/bin.js",
+          "--disable-transpile",
+          "run",
+          "src/scripts/bootstrap-admin.ts"
+        ],
+        "entrypoint": null,
+        "environment": {
+          "APP_URL": "https://shop.example.test",
+          "BETTER_AUTH_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "BOOTSTRAP_ADMIN_EMAIL": "smoke@example.test",
+          "BOOTSTRAP_ADMIN_NAME": "CI smoke",
+          "BOOTSTRAP_ADMIN_PASSWORD": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "COMMERCE_PAYMENT_MODE": "stripe",
+          "DATABASE_URL": "postgresql://<db-user>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@postgres:5432/<db-name>",
+          "EMAIL_FROM": "",
+          "EMAIL_MODE": "simulated",
+          "EMAIL_REPLY_TO": "",
+          "GOOGLE_MAPS_API_KEY": "",
+          "MEDIA_DIR": "/app/storage/media",
+          "NODE_ENV": "production",
+          "PAYLOAD_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "PUBLIC_INDEXING": "false",
+          "SMTP_URL": "",
+          "STRIPE_LIVE_SECRET_KEY": "",
+          "STRIPE_LIVE_WEBHOOK_SECRET": "",
+          "STRIPE_MODE": "test",
+          "STRIPE_TEST_SECRET_KEY": "",
+          "STRIPE_TEST_WEBHOOK_SECRET": ""
+        },
+        "image": "<slug>:ci-ops",
+        "logging": {
+          "driver": "json-file",
+          "options": {
+            "max-file": "3",
+            "max-size": "10m"
+          }
+        },
+        "networks": {
+          "internal": null
+        },
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "media",
+            "target": "/app/storage/media",
+            "volume": {}
+          }
+        ]
+      },
+      "data-check": {
+        "profiles": ["operations"],
+        "command": null,
+        "entrypoint": ["test", "-s", "/var/lib/postgresql/18/docker/PG_VERSION"],
+        "image": "postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015",
+        "network_mode": "none",
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "pgdata",
+            "target": "/var/lib/postgresql",
+            "read_only": true,
+            "volume": {}
+          }
+        ]
+      },
+      "email-test": {
+        "profiles": ["operations"],
+        "command": ["node", "--import", "tsx", "src/scripts/send-test-email-ci.ts"],
+        "entrypoint": null,
+        "environment": {
+          "APP_URL": "https://shop.example.test",
+          "BETTER_AUTH_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "COMMERCE_PAYMENT_MODE": "stripe",
+          "DATABASE_URL": "postgresql://<db-user>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@postgres:5432/<db-name>",
+          "EMAIL_FROM": "",
+          "EMAIL_MODE": "simulated",
+          "EMAIL_REPLY_TO": "",
+          "GOOGLE_MAPS_API_KEY": "",
+          "MEDIA_DIR": "/app/storage/media",
+          "NODE_ENV": "production",
+          "PAYLOAD_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "PUBLIC_INDEXING": "false",
+          "SMTP_URL": "",
+          "STRIPE_LIVE_SECRET_KEY": "",
+          "STRIPE_LIVE_WEBHOOK_SECRET": "",
+          "STRIPE_MODE": "test",
+          "STRIPE_TEST_SECRET_KEY": "",
+          "STRIPE_TEST_WEBHOOK_SECRET": ""
+        },
+        "image": "<slug>:ci-ops",
+        "labels": {
+          "traefik.enable": "false"
+        },
+        "logging": {
+          "driver": "json-file",
+          "options": {
+            "max-file": "3",
+            "max-size": "10m"
+          }
+        },
+        "networks": {
+          "internal": null,
+          "traefik": null
+        }
+      },
+      "media-backup": {
+        "profiles": ["operations"],
+        "command": ["tar", "-czf", "-", "-C", "/app/storage/media", "."],
+        "entrypoint": null,
+        "image": "<slug>:ci",
+        "network_mode": "none",
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "media",
+            "target": "/app/storage/media",
+            "read_only": true,
+            "volume": {}
+          }
+        ]
+      },
+      "media-init": {
+        "profiles": ["operations"],
+        "command": ["chown", "1001:1001", "/app/storage/media"],
+        "entrypoint": null,
+        "image": "<slug>:ci",
+        "network_mode": "none",
+        "user": "0:0",
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "media",
+            "target": "/app/storage/media",
+            "volume": {}
+          }
+        ]
+      },
+      "migrate": {
+        "profiles": ["operations"],
+        "command": [
+          "node",
+          "--import",
+          "tsx",
+          "node_modules/payload/bin.js",
+          "--disable-transpile",
+          "migrate"
+        ],
+        "entrypoint": null,
+        "environment": {
+          "APP_URL": "https://shop.example.test",
+          "BETTER_AUTH_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "COMMERCE_PAYMENT_MODE": "stripe",
+          "DATABASE_URL": "postgresql://<db-user>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@postgres:5432/<db-name>",
+          "EMAIL_FROM": "",
+          "EMAIL_MODE": "simulated",
+          "EMAIL_REPLY_TO": "",
+          "GOOGLE_MAPS_API_KEY": "",
+          "MEDIA_DIR": "/app/storage/media",
+          "NODE_ENV": "production",
+          "PAYLOAD_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "PUBLIC_INDEXING": "false",
+          "SMTP_URL": "",
+          "STRIPE_LIVE_SECRET_KEY": "",
+          "STRIPE_LIVE_WEBHOOK_SECRET": "",
+          "STRIPE_MODE": "test",
+          "STRIPE_TEST_SECRET_KEY": "",
+          "STRIPE_TEST_WEBHOOK_SECRET": ""
+        },
+        "image": "<slug>:ci-ops",
+        "logging": {
+          "driver": "json-file",
+          "options": {
+            "max-file": "3",
+            "max-size": "10m"
+          }
+        },
+        "networks": {
+          "internal": null
+        },
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "media",
+            "target": "/app/storage/media",
+            "volume": {}
+          }
+        ]
+      },
+      "postgres": {
+        "command": null,
+        "entrypoint": null,
+        "environment": {
+          "POSTGRES_DB": "<db-name>",
+          "POSTGRES_PASSWORD": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "POSTGRES_USER": "<db-user>"
+        },
+        "healthcheck": {
+          "test": ["CMD-SHELL", "pg_isready -U <db-user> -d <db-name>"],
+          "timeout": "5s",
+          "interval": "3s",
+          "retries": 20
+        },
+        "image": "postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015",
+        "labels": {
+          "traefik.enable": "false"
+        },
+        "logging": {
+          "driver": "json-file",
+          "options": {
+            "max-file": "3",
+            "max-size": "10m"
+          }
+        },
+        "mem_limit": "536870912",
+        "networks": {
+          "internal": null
+        },
+        "pids_limit": 256,
+        "restart": "unless-stopped",
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "pgdata",
+            "target": "/var/lib/postgresql",
+            "volume": {}
+          }
+        ]
+      },
+      "web": {
+        "cap_drop": ["ALL"],
+        "command": null,
+        "depends_on": {
+          "postgres": {
+            "condition": "service_healthy",
+            "required": true
+          }
+        },
+        "entrypoint": null,
+        "environment": {
+          "APP_URL": "https://shop.example.test",
+          "BETTER_AUTH_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "COMMERCE_PAYMENT_MODE": "stripe",
+          "DATABASE_URL": "postgresql://<db-user>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@postgres:5432/<db-name>",
+          "EMAIL_FROM": "",
+          "EMAIL_MODE": "simulated",
+          "EMAIL_REPLY_TO": "",
+          "GOOGLE_MAPS_API_KEY": "",
+          "JOBS_AUTORUN": "true",
+          "MEDIA_DIR": "/app/storage/media",
+          "NODE_ENV": "production",
+          "PAYLOAD_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "PORT": "<port>",
+          "PUBLIC_INDEXING": "false",
+          "SMTP_URL": "",
+          "STRIPE_LIVE_SECRET_KEY": "",
+          "STRIPE_LIVE_WEBHOOK_SECRET": "",
+          "STRIPE_MODE": "test",
+          "STRIPE_TEST_SECRET_KEY": "",
+          "STRIPE_TEST_WEBHOOK_SECRET": ""
+        },
+        "healthcheck": {
+          "test": [
+            "CMD",
+            "node",
+            "-e",
+            "fetch('http://127.0.0.1:<port>/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          ],
+          "timeout": "8s",
+          "interval": "15s",
+          "retries": 4,
+          "start_period": "2m0s",
+          "start_interval": "2s"
+        },
+        "image": "<slug>:ci",
+        "labels": {
+          "traefik.enable": "false"
+        },
+        "logging": {
+          "driver": "json-file",
+          "options": {
+            "max-file": "3",
+            "max-size": "10m"
+          }
+        },
+        "mem_limit": "1610612736",
+        "networks": {
+          "internal": null,
+          "traefik": null
+        },
+        "pids_limit": 256,
+        "read_only": true,
+        "restart": "unless-stopped",
+        "security_opt": ["no-new-privileges:true"],
+        "tmpfs": [
+          "/tmp:size=64m,mode=1777",
+          "/app/.next/cache:size=64m,uid=1001,gid=1001,mode=0700",
+          "/app/.next/server/route-cache:size=64m,uid=1001,gid=1001,mode=0700"
+        ],
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "media",
+            "target": "/app/storage/media",
+            "volume": {}
+          }
+        ],
+        "ports": [
+          {
+            "target": "<port>",
+            "host_ip": "127.0.0.1",
+            "published": "0",
+            "protocol": "tcp"
+          }
+        ]
+      }
+    },
+    "volumes": {
+      "media": {
+        "name": "<slug>-ci-000000000000-media"
+      },
+      "pgdata": {
+        "name": "<slug>-ci-000000000000-pgdata"
+      }
+    },
+    "x-app": {
+      "environment": {
+        "APP_URL": "https://shop.example.test",
+        "BETTER_AUTH_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "COMMERCE_PAYMENT_MODE": "stripe",
+        "DATABASE_URL": "postgresql://<db-user>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@postgres:5432/<db-name>",
+        "EMAIL_FROM": "",
+        "EMAIL_MODE": "simulated",
+        "EMAIL_REPLY_TO": "",
+        "GOOGLE_MAPS_API_KEY": "",
+        "MEDIA_DIR": "/app/storage/media",
+        "NODE_ENV": "production",
+        "PAYLOAD_SECRET": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "PUBLIC_INDEXING": "false",
+        "SMTP_URL": "",
+        "STRIPE_LIVE_SECRET_KEY": "",
+        "STRIPE_LIVE_WEBHOOK_SECRET": "",
+        "STRIPE_MODE": "test",
+        "STRIPE_TEST_SECRET_KEY": "",
+        "STRIPE_TEST_WEBHOOK_SECRET": ""
+      },
+      "image": "<slug>:ci",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": ["internal"],
+      "volumes": ["media:/app/storage/media"]
+    }
+  },
+  "output": "Images web et ops vérifiées : UID non root, runtime minimal, migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.\n"
+}

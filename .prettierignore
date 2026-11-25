@@ -1,0 +1,29 @@
+# Dependencies, build output and local runtime files
+node_modules/
+.pnpm-store/
+.next/
+.test-build/
+.test-tsconfig-*.json
+*.tsbuildinfo
+storage/
+restore-work/
+playwright-report/
+test-results/
+.env*
+deploy-input.json
+
+# Generated files: preserve their generator's output
+next-env.d.ts
+src/payload-types.ts
+src/app/(payload)/admin/importMap.js
+src/migrations/*.json
+pnpm-lock.yaml
+
+# This formatting pass targets code and configuration, not editorial documents or assets
+**/*.md
+public/
+
+# Local agent work notes (git-ignored)
+.superpowers/
+# Written by scripts/starter-update.mjs (no dependency on prettier)
+.starter.json

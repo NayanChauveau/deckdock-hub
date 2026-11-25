@@ -1,0 +1,93 @@
+{
+  "slug": "example",
+  "identity": {
+    "displayName": "Example",
+    "domain": "example.invalid",
+    "locales": ["fr", "en"],
+    "defaultLocale": "fr"
+  },
+  "app": {
+    "port": 3300,
+    "logService": "example",
+    "userAgent": "Example/0.1"
+  },
+  "modules": {
+    "orders": {
+      "referencePrefix": "EX",
+      "accessCookiePrefix": "ex_order_",
+      "trackingPath": "/{locale}/commande/suivi/{reference}",
+      "accessPath": "/{locale}/commande/acces"
+    }
+  },
+  "deploy": {
+    "directory": "/srv/example",
+    "composeProject": "example-prod",
+    "imageRepository": "ghcr.io/nayanchauveau/example",
+    "volumeOwnerLabel": "example.owner",
+    "volumes": {
+      "database": "example-prod-pgdata",
+      "media": "example-prod-media",
+      "legacyDatabase": null
+    },
+    "database": {
+      "name": "example",
+      "user": "example"
+    },
+    "traefikName": "example",
+    "defaultHost": "example.invalid",
+    "protectedHosts": ["fontus.fr", "www.fontus.fr", "manonkarsenti.com", "www.manonkarsenti.com"],
+    "protectedHealthUrl": "https://manonkarsenti.com/api/health",
+    "opsJobs": ["migrate", "bootstrap-admin"],
+    "requiredSecrets": ["POSTGRES_PASSWORD", "PAYLOAD_SECRET", "BETTER_AUTH_SECRET"],
+    "optionalSecrets": ["GOOGLE_MAPS_API_KEY"],
+    "payments": true,
+    "email": true,
+    "quietWindow": true,
+    "wwwRedirect": false
+  },
+  "analytics": null,
+  "smoke": {
+    "pages": [
+      {
+        "path": "/fr",
+        "contains": "Le site ouvre très bientôt"
+      }
+    ],
+    "extension": "deploy/smoke_site.py"
+  },
+  "github": {
+    "secrets": [
+      "ADMIN_RESET_PASSWORD",
+      "BETTER_AUTH_SECRET",
+      "BOOTSTRAP_ADMIN_EMAIL",
+      "BOOTSTRAP_ADMIN_NAME",
+      "BOOTSTRAP_ADMIN_PASSWORD",
+      "GOOGLE_MAPS_API_KEY",
+      "PAYLOAD_SECRET",
+      "POSTGRES_PASSWORD",
+      "SMTP_URL",
+      "SSH_HOST",
+      "SSH_KEY",
+      "SSH_KNOWN_HOSTS",
+      "SSH_PASSPHRASE",
+      "SSH_PASSWORD",
+      "SSH_PORT",
+      "SSH_USER",
+      "STRIPE_LIVE_SECRET_KEY",
+      "STRIPE_LIVE_WEBHOOK_SECRET",
+      "STRIPE_TEST_SECRET_KEY",
+      "STRIPE_TEST_WEBHOOK_SECRET"
+    ],
+    "variables": [
+      "EMAIL_FROM",
+      "EMAIL_MODE",
+      "EMAIL_REPLY_TO",
+      "PRODUCTION_ALIASES",
+      "PRODUCTION_DEPLOY_ENABLED",
+      "PRODUCTION_HOST",
+      "PUBLIC_INDEXING",
+      "STRIPE_MODE",
+      "VPS_IPV4"
+    ]
+  }
+}
