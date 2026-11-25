@@ -492,10 +492,23 @@ void test('the publish slot is released after success, refusal and error', async
     ),
     /disk/,
   )
-  assert.deepEqual(ctx.slots, { taken: 3, released: 3 })
+  // A workspace that cannot even be set up.
+  await assert.rejects(
+    run(
+      {
+        ...deps,
+        workspace: () => {
+          throw new Error('no workspace')
+        },
+      },
+      ctx.token,
+    ),
+    /no workspace/,
+  )
+  assert.deepEqual(ctx.slots, { taken: 4, released: 4 })
   // Refused before the slot: none taken.
   await run(ctx.deps({}).deps, ctx.token, '..')
-  assert.equal(ctx.slots.taken, 3)
+  assert.equal(ctx.slots.taken, 4)
 })
 
 void test('another version recorded meanwhile: steps 8-9 run again against it, once', async () => {

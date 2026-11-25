@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { Transform, type Readable } from 'node:stream'
+import { Transform, type Readable, type Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { EditionWorkspace, FileMap, PublishIssue } from '../../application/publish'
 import { isEditionCode } from '../../domain/edition'
@@ -29,18 +29,34 @@ class TooLarge extends Error {}
 
 /** The client stopped sending the body (closed or reset the connection): nobody reads an answer. */
 export class UploadAborted extends Error {
+  /** The error code of the abort (no message: it could hold a path). */
+  readonly code: string
   constructor(cause: unknown) {
     super('Upload aborted by the client', { cause })
     this.name = 'UploadAborted'
+    this.code = abortCode(cause) ?? 'unknown'
   }
 }
 
 const quoted = (name: string) => JSON.stringify(name.length > 120 ? `${name.slice(0, 120)}…` : name)
 
-const isPrematureClose = (error: unknown) => {
-  const code: unknown =
-    typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined
-  return code === 'ERR_STREAM_PREMATURE_CLOSE' || code === 'ECONNRESET' || code === 'ABORT_ERR'
+/**
+ * The code of an error that means the client went away (connection closed or reset, request
+ * aborted), or `null`. Disk errors (ENOSPC, EACCES, EEXIST…) are not aborts, even though the
+ * pipeline then destroys the request body with them.
+ */
+const ABORT_CODES = new Set([
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ABORT_ERR',
+])
+function abortCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null
+  const code: unknown = Reflect.get(error, 'code')
+  if (typeof code === 'string' && ABORT_CODES.has(code)) return code
+  if (Reflect.get(error, 'name') === 'AbortError') return 'AbortError'
+  return null
 }
 
 async function sha256File(path: string): Promise<{ sha256: string; size: number }> {
@@ -65,7 +81,11 @@ export function editionWorkspace(options: {
   checker: DeckdockChecker
   limits?: ExtractLimits
   maxDeckJsonBytes?: number
+  /** Where the received body is written (tests inject a failing one). */
+  sink?: (path: string) => Writable
 }): EditionWorkspace {
+  const sink =
+    options.sink ?? ((path: string) => createWriteStream(path, { flags: 'wx', mode: 0o600 }))
   const maxDeckJson = options.maxDeckJsonBytes ?? MAX_DECK_JSON_BYTES
   const { dataDir, upload, checker } = options
   const root = join(dataDir, 'tmp', `publish-${randomUUID()}`)
@@ -100,11 +120,11 @@ export function editionWorkspace(options: {
         },
       })
       try {
-        await pipeline(upload.body, meter, createWriteStream(archive, { flags: 'wx', mode: 0o600 }))
+        await pipeline(upload.body, meter, sink(archive))
       } catch (error) {
         if (error instanceof TooLarge) return 'too_large'
-        // An error of the body itself (not of the disk) is the client going away.
-        if (upload.body.errored || isPrematureClose(error)) throw new UploadAborted(error)
+        // Only the client going away is an abort; anything else (the disk) is a server error.
+        if (abortCode(error) !== null) throw new UploadAborted(error)
         throw error
       }
       return 'ok'

@@ -67,7 +67,7 @@ export async function POST(
     // The token never reaches the logs: only the edition and the error.
     if (error instanceof UploadAborted) {
       // The workspace was cleaned up; the client is gone, the answer is a formality.
-      logger.warn({ edition: edition.slice(0, 100) }, 'publish_upload_aborted')
+      logger.warn({ edition: edition.slice(0, 100), cause: error.code }, 'publish_upload_aborted')
       return Response.json(
         {
           ...serverError(),
