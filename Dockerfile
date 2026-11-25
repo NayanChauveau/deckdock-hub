@@ -4,6 +4,9 @@
 #   assets and public files. No pnpm, npm, tsx, TypeScript sources or build tooling.
 # - `ops`: one-off jobs (Payload migrations, bootstrap and CI scripts run with tsx). Production
 #   dependencies and sources, no Next.js build; never serves traffic.
+# DeckDock hub: the web image also runs the deckdock checker (`python3 -m deckdock`, vendor/deckdock)
+# on uploaded decks. The library needs Python 3.13, which Debian bookworm does not package: the
+# interpreter comes from the official python image (same Debian release), without pip.
 FROM node:24.22.3-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV COREPACK_HOME=/pnpm/corepack
@@ -34,6 +37,16 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     CI=true pnpm install --prod --frozen-lockfile --prefer-offline --store-dir /pnpm/store \
     && rm -rf node_modules/.pnpm/@next+swc-*
 
+# Python 3.13 for the deckdock checker, trimmed: no pip, ensurepip, IDLE, Tk or test modules. The
+# library is compiled here: the web container's filesystem is read-only.
+FROM python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530 AS python
+RUN rm -rf /usr/local/lib/python3.13/site-packages/pip* /usr/local/lib/python3.13/ensurepip \
+        /usr/local/lib/python3.13/idlelib /usr/local/lib/python3.13/tkinter \
+        /usr/local/lib/python3.13/turtledemo /usr/local/lib/python3.13/test \
+        /usr/local/lib/python3.13/lib-dynload/_tkinter*
+COPY vendor/deckdock/deckdock /opt/deckdock/deckdock
+RUN python3 -m compileall -q /opt/deckdock/deckdock
+
 # Shared by both runtime targets: Node.js without its bundled package managers, user 1001.
 # The code belongs to root and is only readable by user 1001: a compromised process cannot
 # change it. User 1001 owns only what it must write (the media volume, and Next.js caches below).
@@ -60,8 +73,18 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# The deckdock checker (README, « Écarts avec l’image du starter »): the interpreter and its standard
+# library from the python stage, the library in /opt/deckdock. Both belong to root.
+COPY --from=python /usr/local/bin/python3.13 /usr/local/bin/python3.13
+COPY --from=python /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/libpython3.13.so.1.0
+COPY --from=python /usr/local/lib/python3.13 /usr/local/lib/python3.13
+COPY --from=python /opt/deckdock /opt/deckdock
+ENV PYTHONPATH=/opt/deckdock PYTHONDONTWRITEBYTECODE=1 HUB_DATA_DIR=/data/hub
 # Next.js writes its page cache at run time (docker-compose.prod.yml mounts both in memory).
-RUN mkdir -p .next/cache .next/server/route-cache \
-    && chown app:app .next/cache .next/server/route-cache
+# The hub's files (HUB_DATA_DIR): docker-compose.prod.yml mounts the hub-files volume there, and a
+# new volume takes this directory's owner.
+RUN ldconfig && ln -s python3.13 /usr/local/bin/python3 \
+    && mkdir -p .next/cache .next/server/route-cache /data/hub \
+    && chown app:app .next/cache .next/server/route-cache /data/hub
 USER app
 CMD ["node", "server.js"]

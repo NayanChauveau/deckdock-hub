@@ -139,6 +139,90 @@
       "cookie": null
     },
     {
+      "compose": ["exec", "-T", "web", "python3", "-m", "deckdock", "--version"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/bin/pip"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/bin/pip3"],
+      "input": null
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "test",
+        "!",
+        "-e",
+        "/usr/local/lib/python3.13/site-packages/pip"
+      ],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/lib/python3.13/ensurepip"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "!", "-w", "/opt/deckdock/deckdock"],
+      "input": null
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "sh",
+        "-c",
+        "mkdir -p /data/hub/smoke-valid/en && cat > /data/hub/smoke-valid/en/deck.json"
+      ],
+      "input": "1e71a73e9de2fd12"
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "python3",
+        "-m",
+        "deckdock",
+        "check",
+        "--non-strict",
+        "--json",
+        "/data/hub/smoke-valid"
+      ],
+      "input": null
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "sh",
+        "-c",
+        "mkdir -p /data/hub/smoke-invalid/en && cat > /data/hub/smoke-invalid/en/deck.json"
+      ],
+      "input": "b4fca3e233813431"
+    },
+    {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "python3",
+        "-m",
+        "deckdock",
+        "check",
+        "--non-strict",
+        "--json",
+        "/data/hub/smoke-invalid"
+      ],
+      "input": null
+    },
+    {
       "compose": ["port", "web", "<port>"],
       "input": null
     },
@@ -176,7 +260,7 @@
       "input": null
     },
     {
-      "request": "/api/globals/order-settings",
+      "request": "/api/customers",
       "method": "GET",
       "body": null,
       "type": null,
@@ -277,6 +361,10 @@
     },
     {
       "compose": ["up", "-d", "--force-recreate", "--wait", "--wait-timeout", "150", "web"],
+      "input": null
+    },
+    {
+      "compose": ["exec", "-T", "web", "test", "-s", "/data/hub/smoke-valid/en/deck.json"],
       "input": null
     },
     {
@@ -609,6 +697,7 @@
           "EMAIL_MODE": "simulated",
           "EMAIL_REPLY_TO": "",
           "GOOGLE_MAPS_API_KEY": "",
+          "HUB_DATA_DIR": "/data/hub",
           "JOBS_AUTORUN": "true",
           "MEDIA_DIR": "/app/storage/media",
           "NODE_ENV": "production",
@@ -666,6 +755,12 @@
             "source": "media",
             "target": "/app/storage/media",
             "volume": {}
+          },
+          {
+            "type": "volume",
+            "source": "hub-files",
+            "target": "/data/hub",
+            "volume": {}
           }
         ],
         "ports": [
@@ -679,6 +774,9 @@
       }
     },
     "volumes": {
+      "hub-files": {
+        "name": "<slug>-ci-000000000000-hub-files"
+      },
       "media": {
         "name": "<slug>-ci-000000000000-media"
       },
@@ -719,5 +817,5 @@
       "volumes": ["media:/app/storage/media"]
     }
   },
-  "output": "Images web et ops vérifiées : UID non root, runtime minimal, migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.\n"
+  "output": "Images web et ops vérifiées : UID non root, runtime minimal, vérificateur deckdock (Python sans pip, volume hub-files), migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.\n"
 }

@@ -14,16 +14,11 @@
     ["PAYLOAD_SECRET", "ssssssssssssssssssssssssssssssssssssssssssssssss"],
     ["BETTER_AUTH_SECRET", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
     ["TRAEFIK_HOST", "<host>"],
-    ["STRIPE_TEST_SECRET_KEY", "sk_test_x"],
-    ["STRIPE_TEST_WEBHOOK_SECRET", "whsec_x"],
-    ["STRIPE_LIVE_SECRET_KEY", ""],
-    ["STRIPE_LIVE_WEBHOOK_SECRET", ""],
     ["SMTP_URL", "smtps://u:p@smtp.mail.test:465"],
     ["EMAIL_FROM", "Shop <shop@mail.test>"],
     ["EMAIL_REPLY_TO", "reply@mail.test"],
     ["GOOGLE_MAPS_API_KEY", ""],
     ["EMAIL_MODE", "smtp"],
-    ["STRIPE_MODE", "test"],
     ["TRAEFIK_ALIASES", "alias.mail.test"],
     ["PUBLIC_INDEXING", "false"],
     ["X_ROBOTS_TAG", "noindex, nofollow"],
@@ -483,11 +478,6 @@
     "SITE_VOLUME_DATABASE": "<volume-database>",
     "SITE_VOLUME_MEDIA": "<media-volume>",
     "SMTP_URL": "smtps://u:p@smtp.mail.test:465",
-    "STRIPE_LIVE_SECRET_KEY": "",
-    "STRIPE_LIVE_WEBHOOK_SECRET": "",
-    "STRIPE_MODE": "test",
-    "STRIPE_TEST_SECRET_KEY": "sk_test_x",
-    "STRIPE_TEST_WEBHOOK_SECRET": "whsec_x",
     "TRAEFIK_ALIASES": "alias.mail.test",
     "TRAEFIK_HOST": "<host>",
     "WEB_IMAGE": "<image>:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -517,11 +507,6 @@
       "POSTGRES_PASSWORD",
       "PUBLIC_INDEXING",
       "SMTP_URL",
-      "STRIPE_LIVE_SECRET_KEY",
-      "STRIPE_LIVE_WEBHOOK_SECRET",
-      "STRIPE_MODE",
-      "STRIPE_TEST_SECRET_KEY",
-      "STRIPE_TEST_WEBHOOK_SECRET",
       "TRAEFIK_ALIASES",
       "TRAEFIK_HOST",
       "WEB_IMAGE"
@@ -550,8 +535,8 @@
         "STRIPE_LIVE_SECRET_KEY": "",
         "STRIPE_LIVE_WEBHOOK_SECRET": "",
         "STRIPE_MODE": "test",
-        "STRIPE_TEST_SECRET_KEY": "sk_test_x",
-        "STRIPE_TEST_WEBHOOK_SECRET": "whsec_x"
+        "STRIPE_TEST_SECRET_KEY": "",
+        "STRIPE_TEST_WEBHOOK_SECRET": ""
       },
       "command": [
         "node",
@@ -593,8 +578,8 @@
         "STRIPE_LIVE_SECRET_KEY": "",
         "STRIPE_LIVE_WEBHOOK_SECRET": "",
         "STRIPE_MODE": "test",
-        "STRIPE_TEST_SECRET_KEY": "sk_test_x",
-        "STRIPE_TEST_WEBHOOK_SECRET": "whsec_x"
+        "STRIPE_TEST_SECRET_KEY": "",
+        "STRIPE_TEST_WEBHOOK_SECRET": ""
       },
       "command": ["node", "--import", "tsx", "src/scripts/send-test-email-ci.ts"],
       "entrypoint": null,
@@ -638,8 +623,8 @@
         "STRIPE_LIVE_SECRET_KEY": "",
         "STRIPE_LIVE_WEBHOOK_SECRET": "",
         "STRIPE_MODE": "test",
-        "STRIPE_TEST_SECRET_KEY": "sk_test_x",
-        "STRIPE_TEST_WEBHOOK_SECRET": "whsec_x"
+        "STRIPE_TEST_SECRET_KEY": "",
+        "STRIPE_TEST_WEBHOOK_SECRET": ""
       },
       "command": [
         "node",
@@ -678,6 +663,7 @@
         "EMAIL_MODE": "smtp",
         "EMAIL_REPLY_TO": "reply@mail.test",
         "GOOGLE_MAPS_API_KEY": "",
+        "HUB_DATA_DIR": "/data/hub",
         "JOBS_AUTORUN": "true",
         "MEDIA_DIR": "/app/storage/media",
         "NODE_ENV": "production",
@@ -688,8 +674,8 @@
         "STRIPE_LIVE_SECRET_KEY": "",
         "STRIPE_LIVE_WEBHOOK_SECRET": "",
         "STRIPE_MODE": "test",
-        "STRIPE_TEST_SECRET_KEY": "sk_test_x",
-        "STRIPE_TEST_WEBHOOK_SECRET": "whsec_x"
+        "STRIPE_TEST_SECRET_KEY": "",
+        "STRIPE_TEST_WEBHOOK_SECRET": ""
       },
       "command": null,
       "entrypoint": null,

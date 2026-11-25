@@ -272,7 +272,8 @@ void test(
 
 void test(
   '--delete-migrations also deletes the module migrations, for a site that never deployed it',
-  unless('accounts'),
+  // The last case removes addresses too.
+  unless('accounts', 'addresses'),
   async () => {
     const copy = await copyRepository()
     const result = removeModule(copy, '--delete-migrations', 'accounts')

@@ -12,6 +12,9 @@ test-results/
 .env*
 deploy-input.json
 
+# Vendored code (scripts/vendor-deckdock.mjs): kept byte for byte as its source
+vendor/
+
 # Generated files: preserve their generator's output
 next-env.d.ts
 src/payload-types.ts

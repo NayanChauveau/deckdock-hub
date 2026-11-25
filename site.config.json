@@ -1,58 +1,45 @@
 {
-  "slug": "example",
+  "slug": "deckdock-hub",
   "identity": {
-    "displayName": "Example",
-    "domain": "example.invalid",
+    "displayName": "DeckDock",
+    "domain": "deckdock-hub.invalid",
     "locales": ["fr", "en"],
     "defaultLocale": "fr"
   },
-  "app": {
-    "port": 3300,
-    "logService": "example",
-    "userAgent": "Example/0.1"
-  },
-  "modules": {
-    "orders": {
-      "referencePrefix": "EX",
-      "accessCookiePrefix": "ex_order_",
-      "trackingPath": "/{locale}/commande/suivi/{reference}",
-      "accessPath": "/{locale}/commande/acces"
-    }
-  },
+  "app": { "port": 3400, "logService": "deckdock-hub", "userAgent": "deckdock-hub/0.1" },
+  "modules": { "decks": { "maxUploadBytes": 104857600 } },
   "deploy": {
-    "directory": "/srv/example",
-    "composeProject": "example-prod",
-    "imageRepository": "ghcr.io/nayanchauveau/example",
-    "volumeOwnerLabel": "example.owner",
+    "directory": "/srv/deckdock-hub",
+    "composeProject": "deckdock-hub-prod",
+    "imageRepository": "ghcr.io/nayanchauveau/deckdock-hub",
+    "volumeOwnerLabel": "deckdock-hub.owner",
     "volumes": {
-      "database": "example-prod-pgdata",
-      "media": "example-prod-media",
+      "database": "deckdock-hub-prod-pgdata",
+      "media": "deckdock-hub-prod-media",
       "legacyDatabase": null
     },
-    "database": {
-      "name": "example",
-      "user": "example"
-    },
-    "traefikName": "example",
-    "defaultHost": "example.invalid",
-    "protectedHosts": ["fontus.fr", "www.fontus.fr", "manonkarsenti.com", "www.manonkarsenti.com"],
+    "database": { "name": "deckdock_hub", "user": "deckdock_hub" },
+    "traefikName": "deckdock-hub",
+    "defaultHost": "deckdock-hub.invalid",
+    "protectedHosts": [
+      "fontus.fr",
+      "www.fontus.fr",
+      "manonkarsenti.com",
+      "www.manonkarsenti.com",
+      "manon.fontus.fr"
+    ],
     "protectedHealthUrl": "https://manonkarsenti.com/api/health",
     "opsJobs": ["migrate", "bootstrap-admin"],
     "requiredSecrets": ["POSTGRES_PASSWORD", "PAYLOAD_SECRET", "BETTER_AUTH_SECRET"],
     "optionalSecrets": ["GOOGLE_MAPS_API_KEY"],
-    "payments": true,
+    "payments": false,
     "email": true,
     "quietWindow": true,
     "wwwRedirect": false
   },
   "analytics": null,
   "smoke": {
-    "pages": [
-      {
-        "path": "/fr",
-        "contains": "Le site ouvre très bientôt"
-      }
-    ],
+    "pages": [{ "path": "/fr", "contains": "Le site ouvre très bientôt" }],
     "extension": "deploy/smoke_site.py"
   },
   "github": {

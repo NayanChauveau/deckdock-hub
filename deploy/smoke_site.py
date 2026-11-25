@@ -2,6 +2,9 @@
 
 Payload: purge and email-test scripts, admin login with the second factor (payload-totp), media
 upload, edited content that survives a recreation, and the administrator password reset.
+DeckDock hub: the deckdock checker runs in the web image (python3 -m deckdock, without pip), on a
+deck written to the hub-files volume (/data/hub, the only writable disk path besides the media),
+and that deck survives a recreation.
 """
 import base64
 import hashlib
@@ -14,7 +17,21 @@ import urllib.error
 import uuid
 
 PAYLOAD_RUN = ['node', '--import', 'tsx', 'node_modules/payload/bin.js', '--disable-transpile', 'run']
-SUMMARY = 'Images web et ops vérifiées : UID non root, runtime minimal, migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.'
+SUMMARY = 'Images web et ops vérifiées : UID non root, runtime minimal, vérificateur deckdock (Python sans pip, volume hub-files), migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.'
+HUB_DATA_DIR = '/data/hub'
+# deckdock/1 example (deckdock spec/examples/valid/minimal.json): one edition, one note.
+DECK = {
+    'format': 'deckdock/1',
+    'deck': {'id': 'hello-deck', 'edition': 'en', 'name': 'My first deck', 'language': ['en'], 'version': 'dev'},
+    'notetypes': [{'id': 'basic', 'name': 'DeckDock Basic', 'kind': 'standard', 'fields': ['Front', 'Back'],
+                   'templates': [{'name': 'Card 1', 'front': '{{Front}}', 'back': '{{FrontSide}}<hr id="answer">{{Back}}'}],
+                   'css': '.card { font-family: sans-serif; }'}],
+    'notes': [{'guid': 'a1B2c3D4e5', 'notetype': 'basic', 'deck': '', 'fields': {'Front': '<p>Hello</p>', 'Back': '<p>World</p>'}, 'tags': []}],
+    'media': [],
+}
+# What a deploy must never bring into the web image with Python.
+ABSENT_PYTHON_TOOLS = ['/usr/local/bin/pip', '/usr/local/bin/pip3', '/usr/local/lib/python3.13/site-packages/pip',
+                       '/usr/local/lib/python3.13/ensurepip']
 
 
 def totp_code(secret, at=None):
@@ -40,6 +57,12 @@ def check_config(config, image, ops_image):
     # email-test joins the traefik network for SMTP egress only: never routed, no media volume.
     assert services['email-test']['labels'] == {'traefik.enable': 'false'}
     assert not services['email-test'].get('volumes')
+    # DeckDock hub: read-only web container, writable only on the hub-files volume (and the media).
+    web = services['web']
+    assert web['read_only'] is True
+    assert web['environment']['HUB_DATA_DIR'] == HUB_DATA_DIR
+    assert {(mount['source'], mount['target']) for mount in web['volumes']} == {
+        ('media', '/app/storage/media'), ('hub-files', HUB_DATA_DIR)}
 
 
 def before_web(stack):
@@ -50,7 +73,36 @@ def before_web(stack):
     assert refused.returncode != 0 and 'Destinataire invalide.' in refused.stderr.decode() + refused.stdout.decode(), refused.stderr[-2000:]
 
 
+def write_deck(stack, folder, deck):
+    """`deck` as <folder>/en/deck.json under the hub's data directory, written by the web user."""
+    target = f'{HUB_DATA_DIR}/{folder}/en'
+    subprocess.run([*stack.args, 'exec', '-T', 'web', 'sh', '-c', f'mkdir -p {target} && cat > {target}/deck.json'],
+                   input=json.dumps(deck).encode(), check=True)
+
+
+def deckdock_check(stack, folder):
+    """Runs the checker the way the hub does; returns (exit code, JSON report)."""
+    result = subprocess.run([*stack.args, 'exec', '-T', 'web', 'python3', '-m', 'deckdock', 'check', '--non-strict',
+                             '--json', f'{HUB_DATA_DIR}/{folder}'], capture_output=True)
+    return result.returncode, json.loads(result.stdout)
+
+
+def check_deckdock(stack):
+    version = stack.compose('exec', '-T', 'web', 'python3', '-m', 'deckdock', '--version', capture=True).stdout
+    assert version.startswith(b'deckdock '), version
+    for path in ABSENT_PYTHON_TOOLS:
+        stack.compose('exec', '-T', 'web', 'test', '!', '-e', path)
+    # The library belongs to root: the web user can read it, never change it.
+    stack.compose('exec', '-T', 'web', 'test', '!', '-w', '/opt/deckdock/deckdock')
+    write_deck(stack, 'smoke-valid', DECK)
+    assert deckdock_check(stack, 'smoke-valid') == (0, {'ok': True, 'issues': []})
+    write_deck(stack, 'smoke-invalid', {'format': 'deckdock/1'})
+    code, report = deckdock_check(stack, 'smoke-invalid')
+    assert code == 1 and report['ok'] is False and report['issues'], report
+
+
 def after_pages(stack):
+    check_deckdock(stack)
     request, password = stack.request, stack.password
     # Standalone server: public files and the Payload admin are served.
     assert request('/site-icon.svg')[0].lstrip().startswith(b'<svg')
@@ -60,7 +112,7 @@ def after_pages(stack):
     password_session = 'payload-token=' + cookie(headers, 'payload-token')
     # Second factor (payload-totp): a password session is refused until a code is entered.
     try:
-        request('/api/globals/order-settings', session=password_session)
+        request('/api/customers', session=password_session)
         raise AssertionError('Session sans TOTP acceptée')
     except urllib.error.HTTPError as error:
         assert error.code == 403
@@ -81,6 +133,8 @@ def after_pages(stack):
 
 
 def after_recreate(stack):
+    # The hub-files volume keeps the decks.
+    stack.compose('exec', '-T', 'web', 'test', '-s', f'{HUB_DATA_DIR}/smoke-valid/en/deck.json')
     assert b'Titre persistant CI' in stack.request('/fr')[0]
     assert stack.request('/api/media/file/' + stack.state['media']['filename'])[0] == stack.state['png']
 

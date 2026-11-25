@@ -1,5 +1,5 @@
 {
-  "name": "example",
+  "name": "deckdock-hub",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -25,9 +25,6 @@
     "db:migrate": "pnpm payload migrate",
     "db:migrate:create": "pnpm payload migrate:create",
     "db:migrate:status": "pnpm payload migrate:status",
-    "commerce:demo": "pnpm payload run src/scripts/commerce-demo.ts",
-    "commerce:maintenance": "pnpm payload run src/scripts/commerce-maintenance.ts",
-    "test:commerce": "node --import tsx --test tests/orders.domain.test.ts tests/orders.application.test.ts tests/orders.adapters.test.ts tests/payments-stripe.test.ts tests/customer-uploads.test.ts",
     "test": "node tests/run.mjs",
     "test:unit": "node --import tsx --test tests/*.test.ts tests/*.test.tsx",
     "lint:fix": "pnpm lint --fix",

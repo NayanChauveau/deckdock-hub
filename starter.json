@@ -142,6 +142,9 @@
     "tests/init-site.test.ts",
     "tests/no-manon-data.test.ts",
     "tests/starter-coverage.test.ts",
-    "tests/starter-update.test.ts"
+    "tests/starter-update.test.ts",
+    "vendor/**",
+    "scripts/vendor-deckdock.mjs",
+    "tests/test_hub_image.py"
   ]
 }

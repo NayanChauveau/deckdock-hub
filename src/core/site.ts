@@ -34,6 +34,8 @@ const schema = z.object({
         accessPath: z.string().startsWith('/'),
       })
       .optional(),
+    // DeckDock hub: the largest deck archive accepted for upload, in bytes.
+    decks: z.object({ maxUploadBytes: z.number().int().positive() }).strict().optional(),
   }),
   deploy: z.object({
     directory: z.string(),

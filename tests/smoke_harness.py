@@ -84,6 +84,14 @@ class Double:
             stdout = bytes([31, 139]) + b' smoke'
         elif command[-1] == 'email-test':
             code, stderr = 1, 'Destinataire invalide.'.encode()
+        elif command[:6] == ['exec', '-T', 'web', 'python3', '-m', 'deckdock']:
+            # DeckDock hub (deploy/smoke_site.py): the checker's version and JSON reports.
+            if command[6] == '--version':
+                stdout = b'deckdock 0.2.0\n'
+            elif command[-1].endswith('/smoke-invalid'):
+                code, stdout = 1, b'{"ok": false, "issues": [{"path": "smoke-invalid/en/deck.json", "where": "", "message": "missing key \'deck\'", "line": null}]}'
+            else:
+                stdout = b'{"ok": true, "issues": []}'
         if check and code:
             raise subprocess.CalledProcessError(code, args)
         return subprocess.CompletedProcess(args, code, stdout, stderr)
@@ -112,7 +120,7 @@ class Double:
             '/api/media/file/smoke.png': Response(PNG),
             '/api/health': Response(b'{"status": "ok"}'),
         }
-        if path == '/api/globals/order-settings':
+        if path == '/api/customers':
             raise urllib.error.HTTPError(request.full_url, 403, 'Forbidden', email.message.Message(), None)
         if path in answers:
             return answers[path]

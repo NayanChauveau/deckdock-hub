@@ -6,6 +6,7 @@ import type { PostgresAdapter } from '@payloadcms/db-postgres'
 import { getPayload } from 'payload'
 import config from '../src/payload.config'
 import { migrations } from '../src/migrations'
+import { modules } from '../src/modules'
 
 // Runs on a database where `payload migrate` applied every migration to an empty schema.
 if (!new URL(process.env['DATABASE_URL'] || '').pathname.endsWith('_test'))
@@ -66,54 +67,58 @@ try {
   )
   assert.deepEqual(changes, [], 'Migration en attente : lancer pnpm db:migrate:create')
 
-  // The delivery countries migration moves the countries opened in the old order settings (a
-  // select of FR and BE) into open records, and keeps the country of existing orders.
-  const step = migrations.find((migration) => migration.name.endsWith('_delivery_countries'))
-  assert.ok(step, 'Migration des pays de livraison absente')
-  const args = { db: db.drizzle, payload, req: {} as never }
-  await step.down(args)
-  await db.drizzle.execute(sql`
-    INSERT INTO order_settings (id, enabled) VALUES (1, true);
-    INSERT INTO order_settings_countries ("order", parent_id, value) VALUES (1, 1, 'FR'), (2, 1, 'BE');
-    INSERT INTO orders (customer_name, customer_email, customer_address, customer_postal_code,
-      customer_city, customer_country, reference, attempt_id, locale, kind, lines)
-    VALUES ('Test', 'test@example.test', '1 Test', '1000', 'Bruxelles', 'BE', 'MG-0000000000000001',
-      'attempt-migration', 'fr', 'plain', '[]'::jsonb)`)
-  await step.up(args)
-  const moved = await db.drizzle.execute<{ country: string; name: string; open: boolean }>(
-    sql`SELECT country::text AS country, name, open FROM delivery_countries ORDER BY id`,
-  )
-  assert.deepEqual(moved.rows, [
-    { country: 'FR', name: 'France', open: true },
-    { country: 'BE', name: 'Belgique', open: true },
-  ])
-  const gone = await db.drizzle.execute<{ name: string | null }>(
-    sql`SELECT to_regclass('public.order_settings_countries')::text AS name`,
-  )
-  assert.equal(gone.rows[0]?.name, null, 'Ancienne table des pays supprimée')
-  const kept = await db.drizzle.execute<{ customer_country: string }>(
-    sql`SELECT customer_country FROM orders WHERE reference = 'MG-0000000000000001'`,
-  )
-  assert.equal(kept.rows[0]?.customer_country, 'BE', 'Pays des commandes existantes conservé')
-  // Settings ticking one country twice open it once; settings never saved open France and
-  // Belgium, the old default.
-  for (const [rows, expected] of [
-    [
-      sql`INSERT INTO order_settings_countries ("order", parent_id, value) VALUES (1, 1, 'BE'), (2, 1, 'BE')`,
-      ['BE'],
-    ],
-    [sql`SELECT 1`, ['FR', 'BE']],
-  ] as const) {
+  // The delivery countries migration belongs to the orders module: a site without it (removed by
+  // scripts/remove-module.mjs, whose removal migration drops the orders tables) skips this check.
+  if (modules.some((entry) => entry.name === 'orders')) {
+    // The delivery countries migration moves the countries opened in the old order settings (a
+    // select of FR and BE) into open records, and keeps the country of existing orders.
+    const step = migrations.find((migration) => migration.name.endsWith('_delivery_countries'))
+    assert.ok(step, 'Migration des pays de livraison absente')
+    const args = { db: db.drizzle, payload, req: {} as never }
     await step.down(args)
-    await db.drizzle.execute(rows)
+    await db.drizzle.execute(sql`
+      INSERT INTO order_settings (id, enabled) VALUES (1, true);
+      INSERT INTO order_settings_countries ("order", parent_id, value) VALUES (1, 1, 'FR'), (2, 1, 'BE');
+      INSERT INTO orders (customer_name, customer_email, customer_address, customer_postal_code,
+        customer_city, customer_country, reference, attempt_id, locale, kind, lines)
+      VALUES ('Test', 'test@example.test', '1 Test', '1000', 'Bruxelles', 'BE', 'MG-0000000000000001',
+        'attempt-migration', 'fr', 'plain', '[]'::jsonb)`)
     await step.up(args)
-    const opened = await db.drizzle.execute<{ country: string }>(
-      sql`SELECT country::text AS country FROM delivery_countries WHERE open ORDER BY id`,
+    const moved = await db.drizzle.execute<{ country: string; name: string; open: boolean }>(
+      sql`SELECT country::text AS country, name, open FROM delivery_countries ORDER BY id`,
     )
-    assert.deepEqual(
-      opened.rows.map((row) => row.country),
-      expected,
+    assert.deepEqual(moved.rows, [
+      { country: 'FR', name: 'France', open: true },
+      { country: 'BE', name: 'Belgique', open: true },
+    ])
+    const gone = await db.drizzle.execute<{ name: string | null }>(
+      sql`SELECT to_regclass('public.order_settings_countries')::text AS name`,
     )
+    assert.equal(gone.rows[0]?.name, null, 'Ancienne table des pays supprimée')
+    const kept = await db.drizzle.execute<{ customer_country: string }>(
+      sql`SELECT customer_country FROM orders WHERE reference = 'MG-0000000000000001'`,
+    )
+    assert.equal(kept.rows[0]?.customer_country, 'BE', 'Pays des commandes existantes conservé')
+    // Settings ticking one country twice open it once; settings never saved open France and
+    // Belgium, the old default.
+    for (const [rows, expected] of [
+      [
+        sql`INSERT INTO order_settings_countries ("order", parent_id, value) VALUES (1, 1, 'BE'), (2, 1, 'BE')`,
+        ['BE'],
+      ],
+      [sql`SELECT 1`, ['FR', 'BE']],
+    ] as const) {
+      await step.down(args)
+      await db.drizzle.execute(rows)
+      await step.up(args)
+      const opened = await db.drizzle.execute<{ country: string }>(
+        sql`SELECT country::text AS country FROM delivery_countries WHERE open ORDER BY id`,
+      )
+      assert.deepEqual(
+        opened.rows.map((row) => row.country),
+        expected,
+      )
+    }
   }
   console.log(
     `Migrations : ${String(migrations.length)} appliquée(s) sur une base vide, aucune migration en attente.`,
