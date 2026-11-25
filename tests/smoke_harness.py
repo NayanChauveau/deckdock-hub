@@ -84,6 +84,8 @@ class Double:
             stdout = bytes([31, 139]) + b' smoke'
         elif command[-1] == 'email-test':
             code, stderr = 1, 'Destinataire invalide.'.encode()
+        elif command[:5] == ['exec', '-T', 'web', 'python3', '-c']:
+            stdout = b'python-runtime-ok\n'
         elif command[:6] == ['exec', '-T', 'web', 'python3', '-m', 'deckdock']:
             # DeckDock hub (deploy/smoke_site.py): the checker's version and JSON reports.
             if command[6] == '--version':
