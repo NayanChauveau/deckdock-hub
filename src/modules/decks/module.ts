@@ -13,6 +13,7 @@ export const decksModule: SiteModule = {
   migrations: ['20261125_224245_decks'],
   files: [
     'tests/decks.domain.test.ts',
+    'tests/decks.files.test.ts',
     'tests/decks.integration.ts',
     'tests/support/in-memory-decks.ts',
   ],
