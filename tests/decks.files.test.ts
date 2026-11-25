@@ -13,6 +13,9 @@ import {
   ExtractError,
   MAX_EDITION_BYTES,
   MAX_EDITION_FILES,
+  MAX_PATH_BYTES,
+  MAX_PATH_DEPTH,
+  MAX_SEGMENT_BYTES,
   type ExtractErrorCode,
 } from '../src/modules/decks/adapters/files/extract'
 
@@ -140,6 +143,80 @@ void test('rejects unusual names: backslash, empty segments, duplicates', async 
     ],
     'duplicate_path',
   )
+})
+
+void test('rejects over-long names without revealing the server path', async () => {
+  for (const name of [
+    `media/${'a'.repeat(300)}`,
+    `media/${'é'.repeat(128)}`, // 256 UTF-8 bytes
+    Array.from({ length: 6 }, () => 'b'.repeat(200)).join('/'),
+    Array.from({ length: MAX_PATH_DEPTH + 1 }, () => 'd').join('/'),
+  ]) {
+    const dir = await scratch()
+    const bytes = await archive([{ name, body: 'x' }])
+    await assert.rejects(extractEdition(Readable.from([bytes]), dir, limits), (error) => {
+      assert.ok(error instanceof ExtractError, String(error))
+      assert.equal(error.code, 'unsafe_path', error.message)
+      assert.ok(!error.message.includes(dir), error.message)
+      assert.ok(!error.message.includes(tmpdir()), error.message)
+      assert.ok(error.message.length < 300, error.message)
+      return true
+    })
+  }
+  const longest = await scratch()
+  const name = `media/${'c'.repeat(MAX_SEGMENT_BYTES)}`
+  await extractEdition(Readable.from([await archive([{ name, body: 'x' }])]), longest, limits)
+  assert.deepEqual(await filesUnder(longest), [name])
+  assert.equal(MAX_PATH_BYTES, 1024)
+})
+
+void test('rejects paths that collide ignoring case or Unicode form', async () => {
+  await refused(
+    [
+      { name: 'Deck.json', body: 'a' },
+      { name: 'deck.json', body: 'b' },
+    ],
+    'duplicate_path',
+  )
+  await refused(
+    [
+      { name: 'media/caf\u00e9.png', body: 'nfc' },
+      { name: 'media/cafe\u0301.png', body: 'nfd' },
+    ],
+    'duplicate_path',
+  )
+  // Parent directories too: Media/ and media/ would merge on a case-insensitive filesystem.
+  await refused(
+    [
+      { name: 'Media/a.png', body: 'a' },
+      { name: 'media/b.png', body: 'b' },
+    ],
+    'duplicate_path',
+  )
+  await refused(
+    [
+      { name: 'media', type: 'directory' },
+      { name: 'MEDIA', type: 'directory' },
+    ],
+    'duplicate_path',
+  )
+  // The same directory, implied then listed, is fine.
+  const dir = await scratch()
+  const bytes = await archive([
+    { name: 'media/a.png', body: 'a' },
+    { name: 'media', type: 'directory' },
+    { name: 'media/b.png', body: 'b' },
+  ])
+  await extractEdition(Readable.from([bytes]), dir, limits)
+  assert.deepEqual(await filesUnder(dir), ['media/a.png', 'media/b.png'])
+})
+
+void test('the stream meter stops a flood of empty tar records', async () => {
+  // Zero blocks carry no member, so only the meter on the decompressed stream can stop them.
+  const flood = gzipSync(Buffer.alloc(8 * 1024 * 1024))
+  assert.ok(flood.length < 64 * 1024)
+  const dir = await refused(flood, 'too_large', { maxBytes: 1, maxFiles: 1 })
+  assert.deepEqual(await filesUnder(dir), [])
 })
 
 void test('rejects names that are not valid UTF-8', async () => {
