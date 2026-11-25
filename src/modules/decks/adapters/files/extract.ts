@@ -48,12 +48,24 @@ export class ExtractError extends Error {
 const STREAM_OVERHEAD_PER_ENTRY = 4096
 const STREAM_OVERHEAD = 1024 * 1024
 
-const quoted = (name: string) => JSON.stringify(name)
+/** Longest path segment most filesystems accept, in UTF-8 bytes. */
+export const MAX_SEGMENT_BYTES = 255
+/** Longest member path accepted, in UTF-8 bytes. */
+export const MAX_PATH_BYTES = 1024
+/** Deepest member path accepted, in segments (an edition is `deck.json` and `media/<file>`). */
+export const MAX_PATH_DEPTH = 16
+
+// Member names are quoted in messages, shortened: a pax path can be very long.
+const quoted = (name: string) => JSON.stringify(name.length > 120 ? `${name.slice(0, 120)}…` : name)
+
+/** The same path for every filesystem: Unicode NFC, case folded (macOS, Windows, Anki clients). */
+const folded = (path: string) => path.normalize('NFC').toUpperCase().toLowerCase()
 
 /**
  * The relative path of a member, as segments, or `null` for the edition root itself (`./`).
  * Accepts one leading `./`; refuses absolute paths, `..`, `.` or empty segments, backslashes,
- * NUL and names that were not valid UTF-8 (decoded as U+FFFD).
+ * NUL, names that were not valid UTF-8 (decoded as U+FFFD), paths deeper than `MAX_PATH_DEPTH`,
+ * longer than `MAX_PATH_BYTES` or with a segment longer than `MAX_SEGMENT_BYTES`.
  */
 function memberSegments(name: string, isDirectory: boolean): string[] | null {
   const unsafe = (reason: string) =>
@@ -67,6 +79,12 @@ function memberSegments(name: string, isDirectory: boolean): string[] | null {
   if (segments.includes('..')) throw unsafe('points outside the edition')
   if (segments.some((segment) => segment === '' || segment === '.'))
     throw unsafe('is not a plain relative path')
+  if (segments.length > MAX_PATH_DEPTH)
+    throw unsafe(`is nested deeper than ${MAX_PATH_DEPTH} levels`)
+  if (Buffer.byteLength(rest, 'utf8') > MAX_PATH_BYTES)
+    throw unsafe(`has a path longer than ${MAX_PATH_BYTES} bytes`)
+  if (segments.some((segment) => Buffer.byteLength(segment, 'utf8') > MAX_SEGMENT_BYTES))
+    throw unsafe(`has a name longer than ${MAX_SEGMENT_BYTES} bytes`)
   return segments
 }
 
@@ -117,7 +135,43 @@ export async function extractEdition(
   // Its failure also reaches the loop below through the extract stream; it is rethrown there.
   feeding.catch(() => undefined)
 
-  const seen = new Set<string>()
+  // Every path met so far, explicit or implied as a parent directory, by its folded form.
+  const seen = new Map<string, { path: string; kind: 'file' | 'directory'; explicit: boolean }>()
+  const collision = (path: string, other: string) =>
+    new ExtractError(
+      'duplicate_path',
+      path === other
+        ? `Archive member ${quoted(path)} appears more than once.`
+        : `Archive member ${quoted(path)} collides with ${quoted(other)} (same name ignoring case or Unicode form).`,
+      path,
+    )
+  const record = (segments: string[], kind: 'file' | 'directory') => {
+    // Keys are built segment by segment: the depth and length caps bound the work per member.
+    let parent = ''
+    let parentKey = ''
+    for (const segment of segments.slice(0, -1)) {
+      parent = parent === '' ? segment : `${parent}/${segment}`
+      parentKey = parentKey === '' ? folded(segment) : `${parentKey}/${folded(segment)}`
+      const known = seen.get(parentKey)
+      if (known === undefined)
+        seen.set(parentKey, { path: parent, kind: 'directory', explicit: false })
+      else if (known.kind === 'file' || known.path !== parent) throw collision(parent, known.path)
+    }
+    const path = segments.join('/')
+    const last = folded(segments[segments.length - 1] ?? '')
+    const key = parentKey === '' ? last : `${parentKey}/${last}`
+    const known = seen.get(key)
+    if (known === undefined) seen.set(key, { path, kind, explicit: true })
+    else if (
+      kind === 'directory' &&
+      known.kind === 'directory' &&
+      !known.explicit &&
+      known.path === path
+    )
+      known.explicit = true
+    else throw collision(path, known.path)
+    return path
+  }
   let files = 0
   let directories = 0
   let bytes = 0
@@ -136,14 +190,7 @@ export async function extractEdition(
       await drain(entry)
       return
     }
-    const path = segments.join('/')
-    if (seen.has(path))
-      throw new ExtractError(
-        'duplicate_path',
-        `Archive member ${quoted(path)} appears more than once.`,
-        path,
-      )
-    seen.add(path)
+    const path = record(segments, type)
     const target = resolve(root, ...segments)
     if (!target.startsWith(root + sep))
       throw new ExtractError(
@@ -191,6 +238,13 @@ export async function extractEdition(
         throw new ExtractError(
           'duplicate_path',
           `Archive member ${quoted(path)} conflicts with another member.`,
+          path,
+        )
+      // A name this filesystem refuses: the publisher's input, not a server fault.
+      if (code === 'ENAMETOOLONG' || code === 'EILSEQ' || code === 'EINVAL')
+        throw new ExtractError(
+          'unsafe_path',
+          `Archive member ${quoted(path)} has a name the server cannot store.`,
           path,
         )
       throw error
