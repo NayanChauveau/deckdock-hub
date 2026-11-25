@@ -22,7 +22,12 @@ en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés
   demande Python 3.13, que Debian bookworm (la base Node du starter) ne fournit pas : l’interpréteur
   et sa bibliothèque standard sont copiés de l’image officielle `python:3.13.x-slim-bookworm`
   (même version de Debian, version et empreinte épinglées dans le `Dockerfile`), sans pip ni
-  ensurepip, IDLE ou Tk. Rien n’est téléchargé avec pip ; l’image `ops` n’a pas Python.
+  ensurepip, IDLE ou Tk. Rien n’est téléchargé avec pip ; l’image `ops` n’a pas Python. Les
+  extensions dont la bibliothèque partagée manque à l’image Node sont retirées (`_ssl`,
+  `_hashlib`, `_sqlite3`, `_curses`, `readline`, `_gdbm`, et les extensions de test) : leur import
+  échoue franchement (`ModuleNotFoundError`), et `hashlib` garde sha256 par son code intégré. Le
+  build échoue si une extension restante ne trouve pas une bibliothèque (`ldd`). La bibliothèque
+  standard et `deckdock` sont compilées au build, le conteneur étant en lecture seule.
 - **La bibliothèque est copiée dans le dépôt** (`vendor/deckdock`), pas récupérée au build : le
   build reste hors ligne. `node scripts/vendor-deckdock.mjs` la recopie depuis le dépôt voisin
   `../deckdock` (`cli/src/deckdock`, fichiers `.py` et `py.typed` seulement) et note le commit
@@ -36,7 +41,8 @@ en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés
   dossier temporaire.
 
 Le smoke des images (`python3 deploy/smoke.py`, extension `deploy/smoke_site.py`) le vérifie sur
-l’image construite : version de `deckdock`, absence de pip, vérification d’un deck valide et d’un
+l’image construite : version de `deckdock`, modules importés par la bibliothèque (sha256 compris),
+extensions retirées bien absentes, absence de pip, vérification d’un deck valide et d’un
 deck invalide écrits sur `/data/hub`, deck toujours présent après la recréation des conteneurs.
 `tests/test_hub_image.py` relit le `Dockerfile` et `docker-compose.prod.yml`.
 
@@ -96,8 +102,7 @@ arrête la base sans supprimer ses données ; éviter
 
 `pnpm db:seed` remplit les contenus absents (accueil, réglages, pages légales avec des textes
 d’exemple de `src/site/legal-placeholders.ts`) et ne modifie jamais un contenu existant ; il ne
-crée aucun compte (l’administrateur local vient de `pnpm dev:setup`). `pnpm commerce:demo` ouvre les commandes et crée une commande de
-démonstration en attente de paiement (base locale `_dev` uniquement) ; son lien privé s’affiche.
+crée aucun compte (l’administrateur local vient de `pnpm dev:setup`).
 
 **Comptes visiteurs en local** (module `accounts`). Le mode email simulé n’envoie rien et n’écrit
 jamais un lien dans les journaux. Pour se connecter en local, ajouter au fichier d’environnement
@@ -165,26 +170,13 @@ dans Umami (public, pas un secret) :
 CSP de ces pages ajoute alors l’hôte à `script-src` et `connect-src` (`src/core/http/csp.ts`).
 Options : `data-do-not-track`, `data-domains` (domaine du site et `www.`), et un filtre
 (`src/core/http/analytics.ts`) qui ne garde que les paramètres `utm_*` des adresses (pas de
-`data-exclude-search`, qui retirerait aussi les campagnes) et n’envoie jamais les pages privées de
-commande (suivi, accès), ni comme page ni comme référent. Sans cookie, pas de bannière ; décrire la
-mesure dans la politique de confidentialité avant de l’activer, durée de conservation comprise : les
+`data-exclude-search`, qui retirerait aussi les campagnes) et n’envoie jamais les pages privées
+déclarées par `privatePaths` (aucune sur le hub, qui n’a pas le module de commandes).
+Sans cookie, pas de bannière ; décrire la mesure dans la politique de confidentialité avant de l’activer, durée de conservation comprise : les
 données sont gardées 25 mois puis supprimées par la purge mensuelle d’`infra-traefik` (phrase à
 reprendre : « Ces statistiques sont conservées 25 mois, puis supprimées automatiquement. » / “These
 statistics are kept for 25 months, then deleted automatically.”). Les tests navigateur sur le build
 de production répondent à la place de l’hôte (`tests/support/analytics-stub.ts`).
-
-Chiffre d’affaires (rapports Revenue et Attribution d’Umami) : Stripe renvoie l’acheteur sur la
-page de suivi avec `?paid=1` (`checkoutReturn`, `src/modules/orders/paths.ts`). Une fois la
-commande payée, la page envoie depuis le navigateur un seul événement `purchase` avec le montant et
-la devise (`src/modules/orders/ui/PurchaseEvent.tsx`), rattaché à la visite et donc à sa source
-(`utm_*`, référent). L’événement ne contient ni la référence ni l’adresse de la page privée (il
-porte l’adresse de l’accueil de la langue), et `localStorage` évite de le compter deux fois au
-rechargement. La politique de confidentialité le dit (phrase à reprendre : « Les pages de suivi
-de commande ne sont pas mesurées : après un paiement, seuls le montant et la devise de la commande
-sont transmis, sans sa référence ni les coordonnées de l’acheteur, pour savoir quelles sources de
-visite mènent à des ventes. » / “Order tracking pages are not measured: after a payment, only the
-order’s amount and currency are sent, without its reference or the buyer’s details, to know which
-sources of visits lead to sales.”).
 
 ## Sécurité du back-office
 
@@ -203,5 +195,4 @@ sources of visits lead to sales.”).
   usage unique valable 24 heures, jamais journalisé.
 
 Les règles TypeScript et ESLint sont décrites dans [CODE_QUALITY.md](CODE_QUALITY.md), le
-système de design dans [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) et les commandes dans
-[COMMERCE.md](COMMERCE.md).
+système de design dans [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).

@@ -143,6 +143,17 @@
       "input": null
     },
     {
+      "compose": [
+        "exec",
+        "-T",
+        "web",
+        "python3",
+        "-c",
+        "\nimport argparse, collections.abc, dataclasses, hashlib, html, json, pathlib, re, string, sys, typing\nimport unicodedata, urllib.parse\nimport deckdock.cli, deckdock.compat, deckdock.format, deckdock.guid, deckdock.issues\nassert sys.version_info[:2] == (3, 13), sys.version\nassert hashlib.sha256(b\"deckdock\").hexdigest() == \"b748c5359d2a1205b67296142d1b1bba1b9c5b2aad532828c587932d52c79343\", \"sha256\"\nassert unicodedata.normalize(\"NFC\", \"é\") == \"é\"\nfor name in (\"_ssl\", \"_hashlib\", \"_sqlite3\", \"_curses\", \"readline\", \"_gdbm\", \"_testcapi\"):\n    try:\n        __import__(name)\n    except ModuleNotFoundError:\n        continue\n    raise AssertionError(name + \" should be absent\")\nprint(\"python-runtime-ok\")\n"
+      ],
+      "input": null
+    },
+    {
       "compose": ["exec", "-T", "web", "test", "!", "-e", "/usr/local/bin/pip"],
       "input": null
     },

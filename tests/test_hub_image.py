@@ -33,6 +33,15 @@ class HubImageTest(unittest.TestCase):
         self.assertIn('site-packages/pip*', stage('python'))
         self.assertIn('ensurepip', stage('python'))
 
+    def test_python_keeps_only_extensions_it_can_load(self):
+        python = stage('python')
+        # Their shared libraries (OpenSSL, SQLite, ncurses, readline, gdbm) are not in the runtime.
+        for extension in ('_ssl.', '_hashlib.', '_sqlite3.', '_curses', 'readline.', '_gdbm.', '_test'):
+            self.assertIn(f'lib-dynload/{extension}', python, extension)
+        self.assertIn('compileall -q --invalidation-mode unchecked-hash /usr/local/lib/python3.13 /opt/deckdock/deckdock', python)
+        # The build fails on an extension whose library is missing.
+        self.assertIn("if ldd \"$file\" | grep -q 'not found'", stage('production'))
+
     def test_web_image_runs_the_vendored_checker(self):
         production = stage('production')
         self.assertIn('COPY vendor/deckdock/deckdock /opt/deckdock/deckdock', stage('python'))

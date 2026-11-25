@@ -29,6 +29,24 @@ DECK = {
     'notes': [{'guid': 'a1B2c3D4e5', 'notetype': 'basic', 'deck': '', 'fields': {'Front': '<p>Hello</p>', 'Back': '<p>World</p>'}, 'tags': []}],
     'media': [],
 }
+# The interpreter the hub relies on: every module the vendored library imports (sha256 through
+# hashlib's built-in code, OpenSSL being absent), and the extensions removed for lack of their
+# shared library, which must fail plainly (Dockerfile, python stage).
+PYTHON_RUNTIME_CHECK = '''
+import argparse, collections.abc, dataclasses, hashlib, html, json, pathlib, re, string, sys, typing
+import unicodedata, urllib.parse
+import deckdock.cli, deckdock.compat, deckdock.format, deckdock.guid, deckdock.issues
+assert sys.version_info[:2] == (3, 13), sys.version
+assert hashlib.sha256(b"deckdock").hexdigest() == "b748c5359d2a1205b67296142d1b1bba1b9c5b2aad532828c587932d52c79343", "sha256"
+assert unicodedata.normalize("NFC", "e\u0301") == "\u00e9"
+for name in ("_ssl", "_hashlib", "_sqlite3", "_curses", "readline", "_gdbm", "_testcapi"):
+    try:
+        __import__(name)
+    except ModuleNotFoundError:
+        continue
+    raise AssertionError(name + " should be absent")
+print("python-runtime-ok")
+'''
 # What a deploy must never bring into the web image with Python.
 ABSENT_PYTHON_TOOLS = ['/usr/local/bin/pip', '/usr/local/bin/pip3', '/usr/local/lib/python3.13/site-packages/pip',
                        '/usr/local/lib/python3.13/ensurepip']
@@ -84,12 +102,18 @@ def deckdock_check(stack, folder):
     """Runs the checker the way the hub does; returns (exit code, JSON report)."""
     result = subprocess.run([*stack.args, 'exec', '-T', 'web', 'python3', '-m', 'deckdock', 'check', '--non-strict',
                              '--json', f'{HUB_DATA_DIR}/{folder}'], capture_output=True)
-    return result.returncode, json.loads(result.stdout)
+    try:
+        return result.returncode, json.loads(result.stdout)
+    except ValueError:
+        raise AssertionError(f'deckdock check {folder}: exit {result.returncode}, no JSON report\n'
+                             f'stdout: {result.stdout[-2000:]!r}\nstderr: {result.stderr[-2000:]!r}') from None
 
 
 def check_deckdock(stack):
     version = stack.compose('exec', '-T', 'web', 'python3', '-m', 'deckdock', '--version', capture=True).stdout
     assert version.startswith(b'deckdock '), version
+    runtime = subprocess.run([*stack.args, 'exec', '-T', 'web', 'python3', '-c', PYTHON_RUNTIME_CHECK], capture_output=True)
+    assert runtime.returncode == 0 and runtime.stdout == b'python-runtime-ok\n', (runtime.returncode, runtime.stderr[-2000:])
     for path in ABSENT_PYTHON_TOOLS:
         stack.compose('exec', '-T', 'web', 'test', '!', '-e', path)
     # The library belongs to root: the web user can read it, never change it.
