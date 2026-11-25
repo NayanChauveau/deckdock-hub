@@ -71,6 +71,10 @@ export interface Config {
     users: User;
     media: Media;
     customers: Customer;
+    authors: Author;
+    decks: Deck;
+    editions: Edition;
+    versions: Version;
     'totp-attempts': TotpAttempt;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
@@ -83,6 +87,10 @@ export interface Config {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     customers: CustomersSelect<false> | CustomersSelect<true>;
+    authors: AuthorsSelect<false> | AuthorsSelect<true>;
+    decks: DecksSelect<false> | DecksSelect<true>;
+    editions: EditionsSelect<false> | EditionsSelect<true>;
+    versions: VersionsSelect<false> | VersionsSelect<true>;
     'totp-attempts': TotpAttemptsSelect<false> | TotpAttemptsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
@@ -234,6 +242,78 @@ export interface Customer {
   collection: 'customers';
 }
 /**
+ * Pseudos publics des auteurs. Un pseudo reste réservé après la suppression du compte.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "authors".
+ */
+export interface Author {
+  id: number;
+  customer?: (number | null) | Customer;
+  handle: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "decks".
+ */
+export interface Deck {
+  id: number;
+  author: number | Author;
+  deckId: string;
+  status: 'pending' | 'approved' | 'hidden';
+  approvedAt?: string | null;
+  hiddenReason?: string | null;
+  tokenHash?: string | null;
+  tokenLastUsedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "editions".
+ */
+export interface Edition {
+  id: number;
+  deck: number | Deck;
+  code: string;
+  latestVersion?: (number | null) | Version;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "versions".
+ */
+export interface Version {
+  id: number;
+  edition: number | Edition;
+  version: string;
+  receivedAt: string;
+  summary:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  files:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  deckJsonSha256: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "totp-attempts".
  */
@@ -378,6 +458,22 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'customers';
         value: number | Customer;
+      } | null)
+    | ({
+        relationTo: 'authors';
+        value: number | Author;
+      } | null)
+    | ({
+        relationTo: 'decks';
+        value: number | Deck;
+      } | null)
+    | ({
+        relationTo: 'editions';
+        value: number | Edition;
+      } | null)
+    | ({
+        relationTo: 'versions';
+        value: number | Version;
       } | null);
   globalSlug?: string | null;
   user:
@@ -497,6 +593,56 @@ export interface MediaSelect<T extends boolean = true> {
 export interface CustomersSelect<T extends boolean = true> {
   authUserId?: T;
   email?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "authors_select".
+ */
+export interface AuthorsSelect<T extends boolean = true> {
+  customer?: T;
+  handle?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "decks_select".
+ */
+export interface DecksSelect<T extends boolean = true> {
+  author?: T;
+  deckId?: T;
+  status?: T;
+  approvedAt?: T;
+  hiddenReason?: T;
+  tokenHash?: T;
+  tokenLastUsedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "editions_select".
+ */
+export interface EditionsSelect<T extends boolean = true> {
+  deck?: T;
+  code?: T;
+  latestVersion?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "versions_select".
+ */
+export interface VersionsSelect<T extends boolean = true> {
+  edition?: T;
+  version?: T;
+  receivedAt?: T;
+  summary?: T;
+  files?: T;
+  deckJsonSha256?: T;
   updatedAt?: T;
   createdAt?: T;
 }

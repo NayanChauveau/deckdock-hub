@@ -1,5 +1,6 @@
 import type { SiteModule } from '@/core/modules/types'
 import { accountsModule } from './accounts/module'
+import { decksModule } from './decks/module'
 
 /**
  * The modules of this site: one line each. Removing a line (and its folder) removes the module.
@@ -8,4 +9,5 @@ import { accountsModule } from './accounts/module'
 // prettier-ignore
 export const modules: readonly SiteModule[] = [
   accountsModule,
+  decksModule,
 ]

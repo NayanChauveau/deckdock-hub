@@ -4,6 +4,7 @@ import * as migration_20261125_150000_accounts_auth_schema from './20261125_1500
 import * as migration_20261125_151000_accounts_customers from './20261125_151000_accounts_customers'
 import * as migration_20261125_152000_accounts_orphan_sweep from './20261125_152000_accounts_orphan_sweep'
 import * as migration_20261125_221655_retrait_orders_payments_stripe_addresses_customer_uploads from './20261125_221655_retrait_orders_payments_stripe_addresses_customer_uploads'
+import * as migration_20261125_224245_decks from './20261125_224245_decks'
 
 export const migrations = [
   {
@@ -35,5 +36,10 @@ export const migrations = [
     up: migration_20261125_221655_retrait_orders_payments_stripe_addresses_customer_uploads.up,
     down: migration_20261125_221655_retrait_orders_payments_stripe_addresses_customer_uploads.down,
     name: '20261125_221655_retrait_orders_payments_stripe_addresses_customer_uploads',
+  },
+  {
+    up: migration_20261125_224245_decks.up,
+    down: migration_20261125_224245_decks.down,
+    name: '20261125_224245_decks',
   },
 ]
