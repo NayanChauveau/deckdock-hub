@@ -1,0 +1,147 @@
+{
+  "pieces": {
+    "deploy": {
+      "files": [
+        "deploy/dispatch.py",
+        "deploy/preflight.py",
+        "deploy/release.py",
+        "deploy/site_config.py",
+        "deploy/smoke.py",
+        "deploy/ssh_connection.py",
+        "deploy/KIT.sha256",
+        "tests/test_kit_parity.py",
+        "scripts/starter-update.mjs",
+        "scripts/starter/**"
+      ]
+    },
+    "core": {
+      "requires": ["deploy"],
+      "files": [
+        ".dockerignore",
+        ".editorconfig",
+        ".gitignore",
+        ".nvmrc",
+        ".prettierignore",
+        ".prettierrc.json",
+        ".vscode/**",
+        ".github/**",
+        "Dockerfile",
+        "components.json",
+        "docker-compose.prod.yml",
+        "eslint.config.mjs",
+        "next.config.mjs",
+        "playwright.config.ts",
+        "pnpm-workspace.yaml",
+        "postcss.config.mjs",
+        "renovate.json",
+        "tsconfig.json",
+        "deploy/**",
+        "scripts/**",
+        "src/**",
+        "tests/**"
+      ]
+    },
+    "orders": {
+      "requires": ["core"],
+      "module": "orders",
+      "files": [
+        "src/modules/orders/**",
+        "src/app/(frontend)/api/commerce/access/route.ts",
+        "src/app/(frontend)/[locale]/commande/acces/page.tsx",
+        "src/app/(frontend)/[locale]/commande/suivi/[reference]/page.tsx",
+        "src/scripts/commerce-demo.ts",
+        "src/scripts/commerce-maintenance.ts",
+        "tests/commerce.http.ts",
+        "tests/commerce.integration.ts",
+        "tests/customer-comment.test.ts",
+        "tests/e2e/orders.spec.ts",
+        "tests/order-reference.test.ts",
+        "tests/orders.adapters.test.ts",
+        "tests/orders.application.test.ts",
+        "tests/orders.domain.test.ts",
+        "tests/orders.ui.test.tsx",
+        "tests/support/in-memory-orders.ts"
+      ]
+    },
+    "payments-stripe": {
+      "requires": ["orders"],
+      "module": "payments-stripe",
+      "dependencies": ["stripe"],
+      "files": [
+        "src/modules/payments-stripe/**",
+        "src/app/(frontend)/api/commerce/webhook/route.ts",
+        "src/app/(frontend)/api/commerce/retry/route.ts",
+        "src/app/(frontend)/api/commerce/simulate/route.ts",
+        "tests/payments-stripe.test.ts"
+      ]
+    },
+    "addresses": {
+      "requires": ["core"],
+      "module": "addresses",
+      "files": [
+        "src/modules/addresses/**",
+        "src/app/(frontend)/api/addresses/route.ts",
+        "src/app/(frontend)/api/addresses/details/route.ts",
+        "tests/addresses.test.ts",
+        "tests/addresses.http.test.ts",
+        "tests/addresses.ui.test.tsx"
+      ]
+    },
+    "accounts": {
+      "requires": ["core"],
+      "module": "accounts",
+      "dependencies": ["better-auth", "kysely", "pg"],
+      "secrets": ["BETTER_AUTH_SECRET"],
+      "migrations": [
+        "20261125_150000_accounts_auth_schema",
+        "20261125_151000_accounts_customers",
+        "20261125_152000_accounts_orphan_sweep"
+      ],
+      "files": [
+        "src/modules/accounts/**",
+        "src/app/(frontend)/api/auth/[...all]/route.ts",
+        "src/app/(frontend)/[locale]/compte/page.tsx",
+        "src/app/(frontend)/[locale]/compte/connexion/page.tsx",
+        "src/app/(frontend)/[locale]/compte/supprime/page.tsx",
+        "tests/accounts.test.ts",
+        "tests/accounts.integration.ts",
+        "tests/accounts.http.ts",
+        "tests/accounts-admin.http.ts",
+        "tests/accounts.ui.test.tsx",
+        "tests/e2e/accounts.spec.ts"
+      ]
+    },
+    "customer-uploads": {
+      "requires": ["core"],
+      "module": "customer-uploads",
+      "files": ["src/modules/customer-uploads/**", "tests/customer-uploads.test.ts"]
+    }
+  },
+  "perSite": [
+    "**/*.md",
+    "*.md",
+    "starter.json",
+    ".starter.json",
+    "site.config.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "docker-compose.yml",
+    ".env.example",
+    "public/**",
+    "docs/**",
+    "src/site/**",
+    "src/migrations/**",
+    "src/styles/**",
+    "src/modules/index.ts",
+    "src/app/(frontend)/[locale]/page.tsx",
+    "src/app/(frontend)/[locale]/[...slug]/**",
+    "tests/fixtures/**",
+    "src/payload-types.ts",
+    "src/app/(payload)/admin/importMap.js",
+    "scripts/init-site.mjs",
+    "tests/init-site.test.ts",
+    "tests/no-manon-data.test.ts",
+    "tests/starter-coverage.test.ts",
+    "tests/starter-update.test.ts"
+  ]
+}

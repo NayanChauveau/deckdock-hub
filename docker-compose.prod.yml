@@ -1,0 +1,209 @@
+# Every per-site value comes from deploy/site_config.py (compose_env): project name through
+# --project-name, the rest through the SITE_* variables below.
+x-app: &app
+  image: ${WEB_IMAGE:?WEB_IMAGE requis}
+  environment: &app-env
+    NODE_ENV: production
+    DATABASE_URL: ${DATABASE_URL:?DATABASE_URL requis}
+    PAYLOAD_SECRET: ${PAYLOAD_SECRET:?PAYLOAD_SECRET requis}
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+    APP_URL: ${APP_URL:?APP_URL requis}
+    MEDIA_DIR: /app/storage/media
+    COMMERCE_PAYMENT_MODE: stripe
+    STRIPE_MODE: ${STRIPE_MODE:-test}
+    STRIPE_TEST_SECRET_KEY: ${STRIPE_TEST_SECRET_KEY:-}
+    STRIPE_TEST_WEBHOOK_SECRET: ${STRIPE_TEST_WEBHOOK_SECRET:-}
+    STRIPE_LIVE_SECRET_KEY: ${STRIPE_LIVE_SECRET_KEY:-}
+    STRIPE_LIVE_WEBHOOK_SECRET: ${STRIPE_LIVE_WEBHOOK_SECRET:-}
+    EMAIL_MODE: ${EMAIL_MODE:-simulated}
+    SMTP_URL: ${SMTP_URL:-}
+    GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+    EMAIL_FROM: ${EMAIL_FROM:-}
+    EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+    PUBLIC_INDEXING: ${PUBLIC_INDEXING:-false}
+  networks: [internal]
+  volumes:
+    - media:/app/storage/media
+  # Docker keeps container logs on the VPS disk: rotated, at most 30 MB per container.
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+services:
+  web:
+    <<: *app
+    environment:
+      <<: *app-env
+      JOBS_AUTORUN: 'true'
+      PORT: ${SITE_PORT:?SITE_PORT requis}
+    restart: unless-stopped
+    mem_limit: 1536m
+    pids_limit: 256
+    # Hardening: no privilege gain, no capability, read-only filesystem (the code also belongs to
+    # root, see Dockerfile). Writable: the media volume, and in memory the deploy's drain flag
+    # (/tmp/draining, deploy/release.py) and the Next.js caches, rebuilt after a restart.
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=64m,uid=1001,gid=1001,mode=0700
+      - /app/.next/server/route-cache:size=64m,uid=1001,gid=1001,mode=0700
+    networks: [internal, traefik]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:${SITE_PORT}/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 8s
+      retries: 4
+      start_period: 120s
+      # Checked every 2 s while starting: the deploy swaps containers as soon as the new one is healthy.
+      start_interval: 2s
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST requis}`)'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}.entrypoints=websecure'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}.tls.certresolver=le'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}.service=${SITE_TRAEFIK_NAME}'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}.middlewares=${SITE_TRAEFIK_NAME}-noindex,${SITE_TRAEFIK_NAME}-retry'
+      # Deploys swap containers without downtime (deploy/release.py): a request that reaches the
+      # old container as it closes is retried on the new one.
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-retry.retry.attempts=3'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-retry.retry.initialinterval=100ms'
+      - 'traefik.http.services.${SITE_TRAEFIK_NAME}.loadbalancer.server.port=${SITE_PORT}'
+      # Traefik polls /api/ready (no database call) every second; the deploy makes it answer 503 in
+      # the old container just before stopping it, so traffic leaves it first.
+      - 'traefik.http.services.${SITE_TRAEFIK_NAME}.loadbalancer.healthcheck.path=/api/ready'
+      - 'traefik.http.services.${SITE_TRAEFIK_NAME}.loadbalancer.healthcheck.interval=1s'
+      - 'traefik.http.services.${SITE_TRAEFIK_NAME}.loadbalancer.healthcheck.timeout=1s'
+      # Empty once PUBLIC_INDEXING=true: Traefik then removes the header and the app decides per route.
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-noindex.headers.customresponseheaders.X-Robots-Tag=${X_ROBOTS_TAG-noindex, nofollow}'
+      # Per-IP rate limit on the Payload auth endpoints. Payload already locks an account after
+      # 5 failures (src/core/payload/collections/Users.ts); this also caps attempts per IP across all accounts
+      # and makes deliberately locking out an administrator much slower. Same bucket for the TOTP
+      # code endpoints of payload-totp (verify, setup, remove), which also lock after 5 wrong codes.
+      # Visitor accounts (module accounts): the magic link request and its link, and account deletion
+      # (request and emailed link), which send an email or spend a token. Never get-session or sign-out,
+      # read by every account page. scripts/remove-module.mjs names these paths when accounts goes.
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST requis}`) && (Path(`/api/users/login`) || Path(`/api/users/forgot-password`) || Path(`/api/users/reset-password`) || Path(`/api/verify-totp`) || Path(`/api/setup-totp`) || Path(`/api/remove-totp`) || Path(`/api/auth/sign-in/magic-link`) || Path(`/api/auth/magic-link/verify`) || PathPrefix(`/api/auth/delete-user`))'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.priority=1000'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.entrypoints=websecure'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.tls.certresolver=le'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.service=${SITE_TRAEFIK_NAME}'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-auth.middlewares=${SITE_TRAEFIK_NAME}-noindex,${SITE_TRAEFIK_NAME}-auth-ratelimit,${SITE_TRAEFIK_NAME}-retry'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.average=5'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.period=1m'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.burst=5'
+
+  postgres:
+    image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+    restart: unless-stopped
+    mem_limit: 512m
+    pids_limit: 256
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${SITE_DB_NAME:?SITE_DB_NAME requis}
+      POSTGRES_USER: ${SITE_DB_USER:?SITE_DB_USER requis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${SITE_DB_USER} -d ${SITE_DB_NAME}']
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    labels:
+      traefik.enable: 'false'
+
+  # One-off jobs run from the ops image (same release SHA, tag suffix -ops): Payload CLI, tsx and
+  # the TypeScript sources live there, never in the web image.
+  migrate:
+    <<: *app
+    image: ${OPS_IMAGE:?OPS_IMAGE requis}
+    profiles: [operations]
+    command:
+      ['node', '--import', 'tsx', 'node_modules/payload/bin.js', '--disable-transpile', 'migrate']
+
+  bootstrap-admin:
+    <<: *app
+    image: ${OPS_IMAGE:?OPS_IMAGE requis}
+    profiles: [operations]
+    environment:
+      <<: *app-env
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    command:
+      [
+        'node',
+        '--import',
+        'tsx',
+        'node_modules/payload/bin.js',
+        '--disable-transpile',
+        'run',
+        'src/scripts/bootstrap-admin.ts',
+      ]
+
+  # CI test email (deploy/email_test.py), with the deployed mail settings. On the traefik network
+  # only for egress to the SMTP server: Traefik never routes to it.
+  email-test:
+    <<: *app
+    image: ${OPS_IMAGE:?OPS_IMAGE requis}
+    profiles: [operations]
+    networks: [internal, traefik]
+    volumes: []
+    labels:
+      traefik.enable: 'false'
+    command: ['node', '--import', 'tsx', 'src/scripts/send-test-email-ci.ts']
+
+  data-check:
+    image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+    profiles: [operations]
+    network_mode: none
+    volumes:
+      - pgdata:/var/lib/postgresql:ro
+    entrypoint: ['test', '-s', '/var/lib/postgresql/18/docker/PG_VERSION']
+
+  media-init:
+    image: ${WEB_IMAGE:?WEB_IMAGE requis}
+    profiles: [operations]
+    user: '0:0'
+    network_mode: none
+    volumes:
+      - media:/app/storage/media
+    command: ['chown', '1001:1001', '/app/storage/media']
+
+  media-backup:
+    image: ${WEB_IMAGE:?WEB_IMAGE requis}
+    profiles: [operations]
+    network_mode: none
+    volumes:
+      - media:/app/storage/media:ro
+    command: ['tar', '-czf', '-', '-C', '/app/storage/media', '.']
+
+networks:
+  traefik:
+    external: true
+    name: traefik
+  internal:
+    internal: true
+
+volumes:
+  pgdata:
+    external: true
+    name: ${SITE_VOLUME_DATABASE:?SITE_VOLUME_DATABASE requis}
+  media:
+    external: true
+    name: ${SITE_VOLUME_MEDIA:?SITE_VOLUME_MEDIA requis}

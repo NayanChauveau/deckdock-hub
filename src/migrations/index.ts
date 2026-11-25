@@ -1,0 +1,33 @@
+import * as migration_20261119_130809_initial from './20261119_130809_initial'
+import * as migration_20261125_103611_delivery_countries from './20261125_103611_delivery_countries'
+import * as migration_20261125_150000_accounts_auth_schema from './20261125_150000_accounts_auth_schema'
+import * as migration_20261125_151000_accounts_customers from './20261125_151000_accounts_customers'
+import * as migration_20261125_152000_accounts_orphan_sweep from './20261125_152000_accounts_orphan_sweep'
+
+export const migrations = [
+  {
+    up: migration_20261119_130809_initial.up,
+    down: migration_20261119_130809_initial.down,
+    name: '20261119_130809_initial',
+  },
+  {
+    up: migration_20261125_103611_delivery_countries.up,
+    down: migration_20261125_103611_delivery_countries.down,
+    name: '20261125_103611_delivery_countries',
+  },
+  {
+    up: migration_20261125_150000_accounts_auth_schema.up,
+    down: migration_20261125_150000_accounts_auth_schema.down,
+    name: '20261125_150000_accounts_auth_schema',
+  },
+  {
+    up: migration_20261125_151000_accounts_customers.up,
+    down: migration_20261125_151000_accounts_customers.down,
+    name: '20261125_151000_accounts_customers',
+  },
+  {
+    up: migration_20261125_152000_accounts_orphan_sweep.up,
+    down: migration_20261125_152000_accounts_orphan_sweep.down,
+    name: '20261125_152000_accounts_orphan_sweep',
+  },
+]

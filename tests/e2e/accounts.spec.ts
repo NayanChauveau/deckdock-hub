@@ -1,0 +1,149 @@
+import { expect, test, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { accountMessages } from '../../src/modules/accounts/messages'
+import { accessibilityViolations, guardEveryPage } from './support'
+
+guardEveryPage()
+
+/** The last link emailed to `to` (the development server's mailbox, set by tests/run.mjs). */
+function lastLink(to: string, kind: 'signInEmail' | 'deletionEmail'): string {
+  const file = process.env['ACCOUNTS_TEST_MAILBOX']
+  if (!file) throw new Error('ACCOUNTS_TEST_MAILBOX absent : lancer la suite avec pnpm test')
+  const mails = readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { kind: string; to: string; url: string })
+    .filter((mail) => mail.to === to && mail.kind === kind)
+  const url = mails.at(-1)?.url
+  if (!url) throw new Error(`Aucun e-mail ${kind} pour ${to}`)
+  return url
+}
+
+let visitors = 0
+const newVisitor = (locale: string) =>
+  `browser-${locale}-${String(Date.now())}-${String(++visitors)}@example.test`
+
+async function noOverflowAt390(page: Page) {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow, page.url()).toBeLessThanOrEqual(0)
+}
+
+/** Asks for a link on the sign-in page, then opens it: the visitor lands on their account. */
+async function signIn(page: Page, locale: 'fr' | 'en', email: string) {
+  const t = accountMessages[locale].signIn
+  await page.goto(`/${locale}/compte`)
+  await expect(page).toHaveURL(new RegExp(`/${locale}/compte/connexion$`))
+  // Server-rendered form: on a cold dev server a submit before hydration would be lost.
+  await page.waitForLoadState('networkidle')
+  await page.getByLabel(t.email).fill(email)
+  await page.getByRole('button', { name: t.submit }).click()
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(t.sent)
+  const link = lastLink(email, 'signInEmail')
+  await page.goto(link)
+  await expect(page).toHaveURL(new RegExp(`/${locale}/compte$`))
+  await expect(page.getByText(email)).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  return link
+}
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const path of ['compte/connexion', 'compte/supprime']) {
+    test(`accessibilité WCAG 2.1 AA et 390 px : /${locale}/${path}`, async ({ page }) => {
+      await page.goto(`/${locale}/${path}`)
+      expect(await accessibilityViolations(page)).toEqual([])
+      await noOverflowAt390(page)
+    })
+  }
+}
+
+test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà servi est expliqué', async ({
+  page,
+}) => {
+  const t = accountMessages.fr
+  const email = newVisitor('fr')
+  const link = await signIn(page, 'fr', email)
+  await expect(page.getByRole('heading', { level: 1, name: t.account.title })).toBeVisible()
+  expect(await accessibilityViolations(page)).toEqual([])
+  // Confirmation step open as well: it is part of the page a visitor may see.
+  await page.getByRole('button', { name: t.account.deleteStart }).click()
+  await expect(page.getByText(t.account.deleteConfirmQuestion)).toBeFocused()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.getByRole('button', { name: t.account.deleteCancel }).click()
+  await noOverflowAt390(page)
+
+  await page.getByRole('button', { name: t.account.signOut, exact: true }).click()
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion$/)
+  await page.goto('/fr/compte')
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion$/)
+  // The same sign-in link again: used up, the sign-in page says so and opens no session.
+  await page.goto(link)
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion\?error=/)
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText(t.signIn.linkError)
+  expect(await accessibilityViolations(page)).toEqual([])
+})
+
+test('account: My account in English, then signing out of every device', async ({
+  page,
+  browser,
+}) => {
+  const t = accountMessages.en.account
+  const email = newVisitor('en')
+  await signIn(page, 'en', email)
+  expect(await accessibilityViolations(page)).toEqual([])
+  await noOverflowAt390(page)
+  // A second browser signed in with the same address loses its session as well.
+  const other = await browser.newContext({ locale: 'en-GB' })
+  try {
+    const second = await other.newPage()
+    await signIn(second, 'en', email)
+    await page.getByRole('button', { name: t.signOutEverywhere }).click()
+    await expect(page).toHaveURL(/\/en\/compte\/connexion$/)
+    await second.goto('/en/compte')
+    await expect(second).toHaveURL(/\/en\/compte\/connexion$/)
+  } finally {
+    await other.close()
+  }
+})
+
+test('compte : suppression confirmée sur la page puis par e-mail ; lien ouvert ailleurs expliqué', async ({
+  page,
+  browser,
+}) => {
+  const t = accountMessages.fr
+  const email = newVisitor('fr')
+  await signIn(page, 'fr', email)
+  await page.getByRole('button', { name: t.account.deleteStart }).click()
+  await page.getByRole('button', { name: t.account.deleteConfirm }).click()
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(t.account.deletionSent(email))
+  expect(await accessibilityViolations(page)).toEqual([])
+  const link = lastLink(email, 'deletionEmail')
+
+  // Opened in another browser, without the session: a clear page, and nothing is deleted.
+  const other = await browser.newContext({ locale: 'fr-FR' })
+  try {
+    const elsewhere = await other.newPage()
+    await elsewhere.goto(link)
+    await expect(elsewhere).toHaveURL(/\/fr\/compte\/connexion\?error=deletion_link$/)
+    await expect(elsewhere.getByRole('main').getByRole('alert')).toHaveText(
+      t.account.deletionLinkError,
+    )
+    expect(await accessibilityViolations(elsewhere)).toEqual([])
+  } finally {
+    await other.close()
+  }
+  await page.reload()
+  await expect(page.getByText(email)).toBeVisible()
+
+  await page.goto(link)
+  await expect(page).toHaveURL(/\/fr\/compte\/supprime$/)
+  await expect(page.getByRole('heading', { level: 1, name: t.deleted.title })).toBeVisible()
+  await page.goto('/fr/compte')
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion$/)
+  // The used link, back in the signed-out browser: explained, not raw JSON.
+  await page.goto(link)
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion\?error=deletion_link$/)
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText(t.account.deletionLinkError)
+})

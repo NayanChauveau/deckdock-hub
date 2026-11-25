@@ -1,0 +1,40 @@
+name: Send test email
+# Sends one email through the deployed SMTP settings, from a one-off email-test container of the
+# current release (ops image, same settings and egress as real orders). Writes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: Adresse qui recevra l'email de test
+        required: true
+        type: string
+      previews:
+        description: Envoyer un aperçu de chaque email de commande (commande fictive) au lieu du simple test
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.repository }}-production
+  cancel-in-progress: false
+jobs:
+  send:
+    if: github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      EMAIL_TEST_TO: ${{ inputs.to }}
+      EMAIL_TEST_PREVIEWS: ${{ inputs.previews }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Send one test email from a one-off container of the current release
+        run: python3 deploy/email_test.py
