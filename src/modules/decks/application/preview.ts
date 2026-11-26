@@ -11,17 +11,29 @@ import { mediaName, type Note, type Notetype } from '../domain/preview'
 /** A media file's URL on the hub, or `''` when the name is not a file of the edition. */
 export type MediaURL = (name: string) => string
 
-/** The preview document's policy: only the hub's media, inline styles, scripts in a sandbox. */
-export const previewCSP = (origin: string): string =>
-  [
-    "default-src 'none'",
-    `img-src ${origin}`,
-    `media-src ${origin}`,
-    "style-src 'unsafe-inline'",
-    'sandbox allow-scripts',
-    // Not in the brief's policy: only the hub's own pages may frame the preview (tighter only).
-    "frame-ancestors 'self'",
-  ].join('; ')
+/**
+ * The directives a `<meta>` can carry: nothing but the edition's media files (`mediaBase` is
+ * `<origin>/d/<handle>/<deck>/<edition>/media/`), inline styles, no base URL, no form target.
+ */
+const directives = (mediaBase: string): string[] => [
+  "default-src 'none'",
+  `img-src ${mediaBase}`,
+  `media-src ${mediaBase}`,
+  "style-src 'unsafe-inline'",
+  "base-uri 'none'",
+  "form-action 'none'",
+]
+
+/**
+ * The preview response's policy: the brief's, tightened (media path instead of the whole origin,
+ * `base-uri` and `form-action`, `frame-ancestors 'self'`), with scripts in a sandbox without
+ * allow-same-origin.
+ */
+export const previewCSP = (mediaBase: string): string =>
+  [...directives(mediaBase), 'sandbox allow-scripts', "frame-ancestors 'self'"].join('; ')
+
+/** The same policy in the document itself, should the header ever be lost (no sandbox in a meta). */
+export const previewMetaCSP = (mediaBase: string): string => directives(mediaBase).join('; ')
 
 type Node =
   | { kind: 'text'; text: string }
@@ -191,14 +203,34 @@ export function renderCard(
   return rewriteMedia(html, media)
 }
 
-/** The preview route's document: the notetype's CSS (media rewritten) and the rendered card. */
-export function cardDocument(notetype: Notetype, html: string, media: MediaURL): string {
+const escapeText = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const LANGUAGE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/
+
+/**
+ * The preview route's document: the policy as the head's first element, the notetype's CSS (media
+ * rewritten, `</style` escaped so it cannot close the element) and the rendered card. `lang` is
+ * set only when it is a language tag.
+ */
+export function cardDocument(
+  notetype: Notetype,
+  html: string,
+  media: MediaURL,
+  options: { mediaBase: string; lang?: string | undefined; title: string },
+): string {
+  const lang = options.lang && LANGUAGE_TAG.test(options.lang) ? ` lang="${options.lang}"` : ''
+  const css = rewriteCssMedia(notetype.css, media).replace(
+    /<\/style/gi,
+    (tag) => `<\\${tag.slice(1)}`,
+  )
   return [
-    '<!doctype html>',
-    '<html><head><meta charset="utf-8">',
+    `<!doctype html><html${lang}><head>`,
+    `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(previewMetaCSP(options.mediaBase))}">`,
+    '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<meta name="robots" content="noindex">',
-    `<style>${rewriteCssMedia(notetype.css, media)}</style>`,
+    `<title>${escapeText(options.title)}</title>`,
+    `<style>${css}</style>`,
     `</head><body class="card">${html}</body></html>`,
   ].join('')
 }

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { cache } from 'react'
 import type { Locale } from '@/core/i18n/locales'
 import { catalogueMessages } from '../catalogue-messages'
-import { isSafeHref, markdownText } from '../domain/markdown'
+import { isSafeHref, markdownText, truncateDescription } from '../domain/markdown'
 import { cataloguePath, deckPagePath } from '../paths'
 import { deckPage } from '../server'
 import { CopyButton } from './CopyButton'
@@ -82,6 +82,8 @@ type Found = Extract<Awaited<ReturnType<typeof deckPage>>, { kind: 'found' }>
 function DeckView({ locale, page }: { locale: Locale; page: Found }) {
   const t = catalogueMessages[locale].deck
   const shown = page.edition
+  // A description is "short Markdown": a very long one is cut before it is parsed.
+  const description = shown.description ? truncateDescription(shown.description) : null
   const languages = shown.languages.map((code) => languageName(locale, code)).join(', ')
   const editionHref = (code: string) =>
     `${deckPagePath(locale, page.handle, page.deckId)}?edition=${encodeURIComponent(code)}`
@@ -130,10 +132,13 @@ function DeckView({ locale, page }: { locale: Locale; page: Found }) {
         </dl>
       </section>
 
-      {shown.description && (
+      {description && (
         <section aria-labelledby="deck-description" className="flex flex-col gap-3 break-words">
           <h2 id="deck-description">{t.description}</h2>
-          <Markdown source={shown.description} headingLevel={3} />
+          <Markdown source={description.text} headingLevel={3} />
+          {description.truncated && (
+            <p className="text-muted-foreground">… {t.descriptionTruncated}</p>
+          )}
         </section>
       )}
 

@@ -265,7 +265,7 @@ void test('a valid new version of a pending deck is pending review and stored', 
     search: 'verbs\nirregular verbs',
   })
   // The deck page's preview, computed once from deck.json (domain/preview.ts).
-  assert.deepEqual(version.preview, { notetypes: [], notes: [], media: [] })
+  assert.deepEqual(version.preview, { notetypes: [], notes: [], media: [], language: 'en' })
   assert.equal(ctx.publish.editions[0]?.latest, version.id)
 })
 

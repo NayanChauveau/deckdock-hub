@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { getPayload } from 'payload'
 import config from '../src/payload.config'
-import { previewCSP } from '../src/modules/decks/application/preview'
+import { previewCSP, previewMetaCSP } from '../src/modules/decks/application/preview'
 import { approveDeck, chooseHandle, createDeck, hideDeck } from '../src/modules/decks/server'
 import { catalogueArchive, catalogueDeck } from './support/catalogue-seed'
 import { present } from './support/present'
@@ -88,6 +88,14 @@ try {
       (await get('/robots.txt')).headers.get('content-security-policy'),
       "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
     )
+    // The exclusion is for /preview/… only: paths that merely look like it keep the baseline
+    // directives (the pages under a language carry them in the proxy's full policy).
+    for (const path of ['/preview', '/previewX', '/fr/preview/x']) {
+      const header = (await get(path)).headers.get('content-security-policy') ?? ''
+      for (const directive of ["frame-ancestors 'self'", "base-uri 'self'", "object-src 'none'"])
+        assert.ok(header.includes(directive), `${path}: ${header}`)
+      assert.ok(!header.includes('sandbox allow-scripts'), path)
+    }
     assert.ok(
       (await get('/en/decks')).text.includes('Irregular verbs'),
       'English edition in English',
@@ -156,10 +164,11 @@ try {
   {
     const answer = await get('/preview/ivan/verbes/fr/0/front')
     assert.equal(answer.status, 200, answer.text)
-    assert.equal(answer.headers.get('content-security-policy'), previewCSP(origin))
+    const mediaBase = `${origin}/d/ivan/verbes/fr/media/`
+    assert.equal(answer.headers.get('content-security-policy'), previewCSP(mediaBase))
     assert.equal(
-      previewCSP(origin),
-      `default-src 'none'; img-src ${origin}; media-src ${origin}; style-src 'unsafe-inline'; sandbox allow-scripts; frame-ancestors 'self'`,
+      previewCSP(mediaBase),
+      `default-src 'none'; img-src ${mediaBase}; media-src ${mediaBase}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors 'self'`,
     )
     assert.ok(!(answer.headers.get('content-security-policy') ?? '').includes('allow-same-origin'))
     assert.equal(answer.headers.get('content-type'), 'text/html; charset=utf-8')
@@ -167,7 +176,14 @@ try {
     assert.equal(answer.headers.get('cache-control'), 'public, max-age=300')
     assert.equal(answer.headers.get('x-frame-options'), 'SAMEORIGIN')
     assert.equal(answer.headers.get('x-robots-tag'), 'noindex')
-    assert.ok(answer.text.startsWith('<!doctype html>'))
+    // The same policy (no sandbox) as the head's first element, the edition's language, a title.
+    assert.ok(
+      answer.text.startsWith(
+        `<!doctype html><html lang="fr"><head><meta http-equiv="Content-Security-Policy" content="${previewMetaCSP(mediaBase)}">`,
+      ),
+      answer.text.slice(0, 300),
+    )
+    assert.ok(answer.text.includes('<title>DeckDock Basic</title>'))
     assert.ok(answer.text.includes('.card { font-family: serif; }'), 'notetype CSS')
     assert.ok(answer.text.includes(`<img src="${origin}/d/ivan/verbes/fr/media/a.png" alt="">`))
     assert.ok(answer.text.includes('CARD_SCRIPT_MARKER'), 'the template, scripts included')
