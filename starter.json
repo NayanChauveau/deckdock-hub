@@ -111,6 +111,41 @@
         "tests/e2e/accounts.spec.ts"
       ]
     },
+    "decks": {
+      "requires": ["accounts"],
+      "module": "decks",
+      "migrations": ["20261125_224245_decks", "20261126_005922_versions_preview"],
+      "files": [
+        "src/modules/decks/**",
+        "src/app/(frontend)/api/publish/[edition]/route.ts",
+        "src/app/(frontend)/d/[[...path]]/route.ts",
+        "src/app/(frontend)/[locale]/compte/decks/page.tsx",
+        "src/app/(frontend)/[locale]/compte/decks/[deckId]/page.tsx",
+        "src/app/(frontend)/[locale]/decks/page.tsx",
+        "src/app/(frontend)/[locale]/d/[handle]/[deck]/page.tsx",
+        "src/app/(frontend)/[locale]/d/[handle]/[deck]/not-found.tsx",
+        "src/app/(frontend)/preview/[handle]/[deck]/[edition]/[note]/[side]/route.ts",
+        "tests/decks.addon.test.py",
+        "tests/decks.domain.test.ts",
+        "tests/decks.files.test.ts",
+        "tests/decks.catalogue.http.ts",
+        "tests/decks.http.ts",
+        "tests/decks.integration.ts",
+        "tests/decks.preview.test.ts",
+        "tests/decks.publish.test.ts",
+        "tests/decks.review.test.ts",
+        "tests/decks.ui.test.tsx",
+        "tests/decks.serve.http.ts",
+        "tests/decks.serve.test.ts",
+        "tests/decks.workspace.test.ts",
+        "tests/e2e/decks-author.spec.ts",
+        "tests/e2e/decks-catalogue.setup.ts",
+        "tests/e2e/decks-catalogue.spec.ts",
+        "tests/support/catalogue-seed.ts",
+        "tests/support/deck-archive.ts",
+        "tests/support/in-memory-decks.ts"
+      ]
+    },
     "customer-uploads": {
       "requires": ["core"],
       "module": "customer-uploads",
@@ -142,6 +177,9 @@
     "tests/init-site.test.ts",
     "tests/no-manon-data.test.ts",
     "tests/starter-coverage.test.ts",
-    "tests/starter-update.test.ts"
+    "tests/starter-update.test.ts",
+    "vendor/**",
+    "scripts/vendor-deckdock.mjs",
+    "tests/test_hub_image.py"
   ]
 }

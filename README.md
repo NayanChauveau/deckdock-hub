@@ -1,21 +1,229 @@
-# Site starter
+# DeckDock hub
 
-Point de départ des sites du même modèle : Next.js, TypeScript, Payload CMS et PostgreSQL,
-déployés sur le VPS par GitHub Actions avec le kit de déploiement commun (`deploy/`).
+Le hub de DeckDock : le site où l’on publie et retrouve des decks Anki au format `deckdock/1`.
+Il est créé à partir du starter de sites (Next.js, TypeScript, Payload CMS et PostgreSQL, déployés
+sur le VPS par GitHub Actions avec le kit de déploiement commun, `deploy/`), avec le module
+`accounts` (comptes visiteurs). Les valeurs propres au site sont dans `site.config.json` : slug
+`deckdock-hub`, port 3400, langues `fr` et `en`. Le domaine n’est pas encore choisi :
+`deckdock-hub.invalid` est un remplaçant, à changer dans `site.config.json` (`identity.domain`,
+`deploy.defaultHost`) avant le premier déploiement. Voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Le dépôt contient le **socle** (`src/core`), des **modules** optionnels (`src/modules` : commandes,
-paiement Stripe, envois de fichiers clients, suggestions d’adresses) et une couche **site**
-d’exemple (`src/site`) à remplacer. Toutes les valeurs propres au site (nom, domaine, port,
-préfixe des références, déploiement) sont dans `site.config.json`, avec des valeurs d’exemple :
-`example`, `Example`, `example.invalid`, port 3300, préfixe `EX`. Voir
-[ARCHITECTURE.md](ARCHITECTURE.md).
+**Création et suite** : [STARTER.md](STARTER.md) (registre d’infra-traefik, secrets, premier
+déploiement). **Mise à jour depuis le starter** : `pnpm starter:update`, en fusion à trois voies,
+sans rien committer ([STARTER.md](STARTER.md), « Mettre à jour un site depuis le starter »).
 
-**Nouveau site** : suivre [STARTER.md](STARTER.md) (`scripts/init-site.mjs` crée un site sans
-module, `pnpm starter:add <module>` en ajoute, registre d’infra-traefik, premier déploiement).
+## Écarts avec l’image du starter
 
-**Mise à jour depuis le starter** : `pnpm starter:update` récupère les changements du starter pour
-les briques du site (`.starter.json`), en fusion à trois voies, sans rien committer
-([STARTER.md](STARTER.md), « Mettre à jour un site depuis le starter »).
+L’image `production` du starter ne contient que Node.js et le serveur Next.js, dans un conteneur
+en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés :
+
+- **Python et le vérificateur `deckdock`.** Le hub lance `deckdock check --non-strict --json
+  <dossier>` et `deckdock compat <précédent> <nouveau> --json`, par `python3 -P -c <lanceur>` : le
+  lanceur limite l’espace d’adressage du processus à 768 Mio (`RLIMIT_AS`), puis exécute le module
+  comme `-m deckdock`. La bibliothèque
+  demande Python 3.13, que Debian bookworm (la base Node du starter) ne fournit pas : l’interpréteur
+  et sa bibliothèque standard sont copiés de l’image officielle `python:3.13.x-slim-bookworm`
+  (même version de Debian, version et empreinte épinglées dans le `Dockerfile`), sans pip ni
+  ensurepip, IDLE ou Tk. Rien n’est téléchargé avec pip ; l’image `ops` n’a pas Python. Les
+  extensions dont la bibliothèque partagée manque à l’image Node sont retirées (`_ssl`,
+  `_hashlib`, `_sqlite3`, `_curses`, `readline`, `_gdbm`, et les extensions de test) : leur import
+  échoue franchement (`ModuleNotFoundError`), et `hashlib` garde sha256 par son code intégré. Le
+  build échoue si une extension restante ne trouve pas une bibliothèque (`ldd`). La bibliothèque
+  standard et `deckdock` sont compilées au build, le conteneur étant en lecture seule.
+- **La bibliothèque est copiée dans le dépôt** (`vendor/deckdock`), pas récupérée au build : le
+  build reste hors ligne. `node scripts/vendor-deckdock.mjs` la recopie depuis le dépôt voisin
+  `../deckdock` (`cli/src/deckdock`, fichiers `.py` et `py.typed` seulement) et note le commit
+  source dans `vendor/deckdock/SOURCE` ; relancer puis committer pour la mettre à jour. Dans
+  l’image, elle est dans `/opt/deckdock` (`PYTHONPATH=/opt/deckdock`), compilée au build, et
+  appartient à root.
+- **Un volume en écriture, `hub-files`, monté sur `/data/hub`** (`HUB_DATA_DIR`) : les decks
+  envoyés et leurs éditions. Le conteneur `web` reste en lecture seule (`read_only: true`) ; il
+  n’écrit que sur ce volume, le volume des médias et les tmpfs du starter. Le dossier appartient à
+  l’utilisateur 1001 (un nouveau volume prend son propriétaire). En test, `HUB_DATA_DIR` désigne un
+  dossier temporaire.
+
+Le smoke des images (`python3 deploy/smoke.py`, extension `deploy/smoke_site.py`) le vérifie sur
+l’image construite : version de `deckdock`, modules importés par la bibliothèque (sha256 compris),
+extensions retirées bien absentes, absence de pip, vérification d’un deck valide et d’un
+deck invalide écrits sur `/data/hub`, deck toujours présent après la recréation des conteneurs.
+`tests/test_hub_image.py` relit le `Dockerfile` et `docker-compose.prod.yml`.
+
+## Écarts avec le code du starter
+
+Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starter ont dû changer.
+À reprendre à chaque `pnpm starter:update` :
+
+- **Module `accounts`** : `adapters/payload/Customers.ts` (crochet `beforeDelete` dans la
+  transaction de suppression), `module.ts` (les contributions des autres modules lues par
+  `extensionsOf`), `server.ts` (`accountLinks`), `ui/AccountView.tsx` et `ui/AccountPage.tsx` (liens
+  « Pages de votre compte »), `messages.ts` (leur libellé), et le nouveau `extension.ts` (contrat
+  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`).
+- **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
+- **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
+  `'none'` dans l’administration.
+- **`next.config.mjs`** : la CSP de base saute `/preview/`, et `/d/` reçoit la CSP des fichiers
+  servis.
+- **`src/app/robots.ts`** : `/d/` et `/preview/` exclus.
+- **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
+- **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
+- **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios
+  `decks` et `decks_http`.
+
+Candidats à remonter dans le starter : le point d’extension de `accounts` (`extension.ts`, suppression
+et liens du compte), un `frame-src` réglable séparément pour le site public et l’administration, et
+un emplacement de configuration par module dans `site.ts` (au lieu d’un schéma ajouté à la main).
+
+**À régler avant le premier déploiement** : le volume `hub-files` est géré par compose
+(`deckdock-hub-prod_hub-files`), hors de la liste des volumes du kit de déploiement : ni la
+sauvegarde faite avant chaque déploiement, ni la sauvegarde de la nuit d’infra-traefik ne le
+contiennent encore.
+
+## Modération
+
+Un deck a trois états : `pending` (en attente), `approved` (validé) et `hidden` (masqué).
+
+- Le premier envoi d’un deck le laisse **en attente** : il n’est ni dans le catalogue ni indexé, mais
+  il est servi au plugin (`X-Robots-Tag: noindex`) et visible de son auteur, qui peut le tester. Les
+  versions suivantes d’un deck validé sont publiées directement.
+- **Valider / Masquer** : le tableau de bord de l’administration (`/admin`) liste les decks en
+  attente (pseudo/deck, date, lien vers la fiche, `index.json`) avec les boutons **Valider** et
+  **Masquer**. Ces actions exigent un administrateur connecté avec sa double authentification
+  (TOTP) ; un visiteur, même propriétaire du deck, reçoit 403. Elles sont aussi possibles depuis la
+  fiche du deck (champs état et raison), avec les mêmes règles.
+- **Masquer** exige une raison non vide (affichée sur la page « Deck retiré » et dans la fiche).
+  Un deck masqué disparaît du catalogue, ses adresses `/d/…` répondent 410, la publication est
+  refusée (410) et sa page répond 404 avec un message « retiré ». Un administrateur peut le valider
+  de nouveau (la raison est alors effacée).
+- **Compte supprimé** : supprimer un compte visiteur (par lui-même, par un administrateur ou par la
+  tâche de nettoyage) masque ses decks avec la raison « Compte supprimé » et révoque leurs jetons,
+  dans la transaction de la suppression. Ces decks **ne peuvent pas être validés de nouveau**
+  (l’auteur est détaché de son compte) et le pseudo reste réservé.
+- Le pseudo est choisi une fois et ne change plus (un auteur qui s’est trompé s’adresse à un
+  administrateur).
+
+## Limites
+
+| Limite | Valeur | Où |
+| --- | --- | --- |
+| Archive envoyée (compressée) | 100 Mo, `HUB_MAX_UPLOAD_BYTES` ou `modules.decks.maxUploadBytes` | 413 |
+| Édition décompressée | 500 MiB et 20 000 fichiers ; chemins de 16 niveaux, 255 octets par segment, 1024 par chemin au plus | 422 |
+| `deck.json` | 16 Mio | 422, avant lecture |
+| Vérificateur | 768 Mio d’espace d’adressage par processus ; au-delà, « deck.json trop complexe » | 422 |
+| Durée d’un envoi | 120 s pour recevoir tout le corps | 408 |
+| Decks par auteur | 10, quel que soit leur état | espace auteur |
+| Versions d’un deck en attente | 3 au total (toutes éditions) jusqu’à sa validation | 403 |
+| Stockage par auteur | 2 Gio : taille des fichiers de toutes les versions de ses decks, chaque version comptée avec tous ses fichiers | 403 |
+| Publications simultanées | 2 par processus ; les autres attendent 30 s, puis 503 + `Retry-After` | application |
+| Publications par deck | 30 par 10 minutes (en mémoire, remis à zéro au redémarrage) | 429 |
+| Publications par IP | 30 par minute, rafale 10 | routeur Traefik `-publish` |
+| Service `/d/…` | aucune limite Traefik (le plugin ne réessaie pas sur 429) | — |
+
+## API de publication
+
+`POST /api/publish/<édition>` (module `decks`) reçoit l’archive `tar.gz` d’une édition compilée,
+envoyée par la CI d’un auteur avec `Authorization: Bearer <jeton du deck>` (commande `publish` de
+l’Action DeckDock). La réponse est toujours du JSON :
+`{"status", "version", "notes", "warnings": [...], "errors": [{"where", "message"}]}`, avec
+`status` = `published`, `already_published`, `pending_review` ou `rejected`.
+
+- Contrôles, dans l’ordre : jeton (401), limite par deck (429, `Retry-After`), deck masqué (410),
+  édition de l’adresse (422), taille (413), envoi reçu en 120 s (408), décompression sûre et disposition `deck.json` +
+  `media/<fichier>` (422), `deckdock check --non-strict` (422, une erreur par ligne), `deck.id` et
+  `deck.edition` (409), version `dev` (422), version déjà reçue (200 `already_published` si mêmes
+  fichiers, sinon 409), quotas de l’auteur (403 : 3 versions pour un deck en attente, 2 Gio par
+  auteur), `deckdock compat` avec la dernière version (409 si cassant, avertissement
+  si un champ est ajouté à la fin). Puis les fichiers vont dans `HUB_DATA_DIR/blobs`, et
+  l’édition, la version et la dernière version sont écrites dans une seule transaction.
+- L’envoi est copié dans `HUB_DATA_DIR/tmp/publish-<uuid>`, toujours supprimé ensuite. Taille
+  maximale : `HUB_MAX_UPLOAD_BYTES`, sinon `modules.decks.maxUploadBytes` (100 Mo).
+- Le vérificateur est lancé par `HUB_PYTHON` (par défaut `python3`), Python 3.13 au moins, avec la
+  bibliothèque sur `PYTHONPATH` (`/opt/deckdock` dans l’image, `vendor/deckdock` en local), sans
+  les secrets du site dans son environnement. Les tests trouvent `python3.14`, `python3.13` ou
+  `python3` s’il est assez récent (ou `HUB_PYTHON`) ; la CI installe Python 3.13 pour le groupe `web`.
+- Limites de débit : 30 envois par deck et par 10 minutes dans l’application (en mémoire, par
+  processus : un redémarrage la remet à zéro), et 30 par minute et par IP (rafale 10) par le
+  routeur Traefik `-publish`, distinct du routeur `-auth` (5 par minute) pour qu’une CI publie
+  plusieurs éditions d’affilée.
+- La maintenance du site ne bloque pas la publication : les auteurs publient avant l’ouverture.
+- Ressources bornées : un `deck.json` de plus de 16 Mio est refusé (422) avant d’être lu. Le hub ne
+  le lit d’abord que pour trouver `deck.edition` (lecture linéaire, sans construire le document) ;
+  il ne l’analyse qu’après l’accord du vérificateur, pour ne jamais tenir deux copies en mémoire. Le
+  vérificateur tourne avec 768 Mio d’espace d’adressage : s’il manque de mémoire (`MemoryError`,
+  code de sortie 3 du lanceur), la réponse est 422 « deck.json is too complex » ; s’il est tué ou
+  échoue autrement, 500 journalisé (`publish_failed`). Sous macOS, qui ne sait pas abaisser
+  `RLIMIT_AS`, le développement tourne sans cette limite ; sous Linux (l’image), son échec arrête
+  le vérificateur. Au plus 2 publications sont traitées à la fois par processus, les suivantes
+  attendent une place 30 s puis reçoivent 503 avec `Retry-After`. Un corps qui n’est pas reçu en
+  entier dans les 120 s est coupé (408, fichiers temporaires supprimés), pour qu’un envoi lent ne
+  garde pas une place. Un envoi interrompu par le client est journalisé en avertissement et
+  nettoyé.
+- Quotas : 10 decks par auteur (création refusée au-delà, message dans l’espace auteur) ; un deck en
+  attente reçoit au plus 3 versions, toutes éditions confondues, jusqu’à sa validation (403, entrée
+  `quota`) ; un auteur stocke au plus 2 Gio, somme de la taille des fichiers de chaque version de
+  ses decks (un fichier repris d’une version à l’autre compte à chaque fois), vérifiée avant
+  d’enregistrer (403, entrée `quota`). Une nouvelle exécution d’une version déjà reçue reste
+  `already_published`. Les contrôles précèdent l’écriture : deux envois simultanés peuvent dépasser
+  d’une version (une par place de publication). Constantes dans
+  `src/modules/decks/domain/quotas.ts`.
+- La dernière version d’une édition est toujours la dernière reçue : l’enregistrement verrouille la
+  ligne de l’édition (`SELECT … FOR UPDATE`) et vérifie que la dernière version est encore celle
+  comparée par `compat`. Sinon, les contrôles 8 et 9 reprennent une fois contre la nouvelle ; si elle
+  change encore, 409 « réessayer ».
+- La date de dernière utilisation du jeton n’est notée qu’après la limite de débit et le contrôle
+  du deck masqué.
+
+## Service au plugin
+
+Chaque deck est servi dans la structure « Publishing layout » du format, sous
+`<base>` = `https://<domaine>/d/<pseudo>/<deck-id>` : `<base>/index.json` (`deckdock-index/1`,
+construit à partir de la dernière version de chaque édition, trié par édition, écrit comme
+`make_index.py` du template), `<base>/<édition>/deck.json` et `<base>/<édition>/media/<fichier>`
+(nom en encodage pourcentage). L’apprenant colle `<base>/<édition>/` dans le plugin.
+
+- `ETag` = sha256 des octets servis, 304 sur `If-None-Match` (liste, `*`, comparaison faible).
+  `Cache-Control: public, max-age=300` pour `index.json` et `deck.json`, `public,
+  max-age=31536000, immutable` pour les médias. Pas de requêtes partielles (`Range`).
+- Les fichiers sont lus en flux depuis `HUB_DATA_DIR/blobs`. Un média est cherché exactement sous
+  `media/<nom>` dans la liste des fichiers de la version : aucun chemin n’est construit à partir de
+  l’adresse.
+- Médias : type déduit de l’extension par une liste fermée (images, son, vidéo, polices, CSS, JSON,
+  texte), sinon `application/octet-stream`, jamais `text/html`. CSP `default-src 'none'; frame-ancestors 'none'; sandbox`
+  (posée aussi dans `next.config.mjs`, dont les en-têtes l’emportent sur ceux de la route),
+  `nosniff` et `Content-Disposition: inline; filename*=UTF-8''…`.
+- Deck en attente : servi avec `X-Robots-Tag: noindex`. Deck masqué : 410. Pseudo, deck, édition ou
+  fichier inconnus : 404, la même réponse JSON minimale dans tous les cas.
+- Comme la publication, ce service reste ouvert pendant la maintenance : un auteur teste son deck
+  avant l’ouverture du site.
+- Le test HTTP lance le vrai code du plugin (`deckdock/addon`, dépôt cloné à côté, ou
+  `DECKDOCK_ADDON_SRC`) contre le serveur de test ; sans ce dépôt, il est sauté avec un message.
+
+## Catalogue, page de deck et aperçu
+
+- **Catalogue** `/{fr,en}/decks?q=&lang=&page=` : decks validés seulement, 20 par page, une ligne
+  par deck (l’édition dans la langue du visiteur, sinon la première par code). La recherche porte
+  sur le nom et la description, sans casse ni accents : un texte replié (`summary.search`) est
+  calculé à la publication, sans extension Postgres. `lang` filtre sur la sous-étiquette
+  principale des langues des éditions.
+- **Page de deck** `/{fr,en}/d/<pseudo>/<deck-id>?edition=` : licence, page d’accueil, éditions et
+  leurs adresses à copier, nombre de notes, dernière version, description Markdown (rendue en
+  éléments React, jamais en HTML de l’auteur, lecture linéaire, coupée à 20 000 caractères), aperçu et historique. Deck en attente : 404 sauf
+  pour son auteur. Deck masqué : page « Deck retiré », avec le statut 404 (une page Next.js ne peut
+  pas répondre 410 ; les adresses `/d/…` du plugin répondent bien 410).
+- **Aperçu** : 5 notes au plus (une par type de note d’abord), choisies à la publication et
+  gardées dans `versions.preview`. Une note dont les champs dépassent 20 000 caractères, ou un type
+  de note dont la CSS ou un modèle les dépasse, est laissé de côté. Les modèles, les textes à trous
+  et les références aux médias (`[sound:…]`, `url(…)`) sont lus par des parcours linéaires, sans
+  expression régulière à retour arrière. Chaque face est un document à part,
+  `/preview/<pseudo>/<deck-id>/<édition>/<n>/<front|back>`, servi avec la CSP
+  `default-src 'none'; img-src <base>/<édition>/media/; media-src <base>/<édition>/media/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors 'self'`
+  (répétée sans `sandbox` dans un `<meta>` en tête du document, avec `lang` et `<title>`)
+  et affiché dans `<iframe sandbox="allow-scripts">` : le HTML et le JavaScript des cartes
+  tournent dans une origine opaque, sans accès aux cookies ni aux pages du site. Faute de
+  `script-src`, cette CSP bloque en fait les scripts des cartes. `next.config.mjs` exclut
+  `/preview/` de sa CSP de base, dont les en-têtes remplaceraient ceux de la route. Les pages
+  publiques autorisent `frame-src 'self'` pour ces cadres.
+- `robots.txt` exclut `/d/` et `/preview/` ; le catalogue et les pages de deck restent indexables
+  (selon `PUBLIC_INDEXING`).
 
 ## Prérequis
 
@@ -57,18 +265,18 @@ déploiement (`tests/admin-access.test.ts`). Retirer la ligne pour tester l’en
 Pas à pas, sans le script : `cp .env.example .env.local` (puis `PAYLOAD_SECRET` remplacé par
 `openssl rand -hex 48`), `pnpm db:start`, `pnpm db:migrate`, `pnpm db:seed`, `pnpm dev`.
 
-- Site : http://localhost:3300 (redirige vers `/fr`)
-- Administration : http://localhost:3300/admin
-- État de la connexion BDD : http://localhost:3300/api/health
+- Site : http://localhost:3400 (redirige vers `/fr`)
+- Administration : http://localhost:3400/admin
+- État de la connexion BDD : http://localhost:3400/api/health
 
-PostgreSQL écoute sur `127.0.0.1:5434` (base `example_dev`, identifiants de développement
-uniquement). `pnpm db:stop` arrête la base sans supprimer ses données ; éviter
+PostgreSQL écoute sur `127.0.0.1:5435` (base `deckdock_hub_dev`, identifiants de développement
+uniquement ; 5434 est le port du starter, pour que les deux tournent en même temps). `pnpm db:stop`
+arrête la base sans supprimer ses données ; éviter
 `docker compose down -v`, qui efface le volume.
 
 `pnpm db:seed` remplit les contenus absents (accueil, réglages, pages légales avec des textes
 d’exemple de `src/site/legal-placeholders.ts`) et ne modifie jamais un contenu existant ; il ne
-crée aucun compte (l’administrateur local vient de `pnpm dev:setup`). `pnpm commerce:demo` ouvre les commandes et crée une commande de
-démonstration en attente de paiement (base locale `_dev` uniquement) ; son lien privé s’affiche.
+crée aucun compte (l’administrateur local vient de `pnpm dev:setup`).
 
 **Comptes visiteurs en local** (module `accounts`). Le mode email simulé n’envoie rien et n’écrit
 jamais un lien dans les journaux. Pour se connecter en local, ajouter au fichier d’environnement
@@ -136,26 +344,13 @@ dans Umami (public, pas un secret) :
 CSP de ces pages ajoute alors l’hôte à `script-src` et `connect-src` (`src/core/http/csp.ts`).
 Options : `data-do-not-track`, `data-domains` (domaine du site et `www.`), et un filtre
 (`src/core/http/analytics.ts`) qui ne garde que les paramètres `utm_*` des adresses (pas de
-`data-exclude-search`, qui retirerait aussi les campagnes) et n’envoie jamais les pages privées de
-commande (suivi, accès), ni comme page ni comme référent. Sans cookie, pas de bannière ; décrire la
-mesure dans la politique de confidentialité avant de l’activer, durée de conservation comprise : les
+`data-exclude-search`, qui retirerait aussi les campagnes) et n’envoie jamais les pages privées
+déclarées par `privatePaths` (aucune sur le hub, qui n’a pas le module de commandes).
+Sans cookie, pas de bannière ; décrire la mesure dans la politique de confidentialité avant de l’activer, durée de conservation comprise : les
 données sont gardées 25 mois puis supprimées par la purge mensuelle d’`infra-traefik` (phrase à
 reprendre : « Ces statistiques sont conservées 25 mois, puis supprimées automatiquement. » / “These
 statistics are kept for 25 months, then deleted automatically.”). Les tests navigateur sur le build
 de production répondent à la place de l’hôte (`tests/support/analytics-stub.ts`).
-
-Chiffre d’affaires (rapports Revenue et Attribution d’Umami) : Stripe renvoie l’acheteur sur la
-page de suivi avec `?paid=1` (`checkoutReturn`, `src/modules/orders/paths.ts`). Une fois la
-commande payée, la page envoie depuis le navigateur un seul événement `purchase` avec le montant et
-la devise (`src/modules/orders/ui/PurchaseEvent.tsx`), rattaché à la visite et donc à sa source
-(`utm_*`, référent). L’événement ne contient ni la référence ni l’adresse de la page privée (il
-porte l’adresse de l’accueil de la langue), et `localStorage` évite de le compter deux fois au
-rechargement. La politique de confidentialité le dit (phrase à reprendre : « Les pages de suivi
-de commande ne sont pas mesurées : après un paiement, seuls le montant et la devise de la commande
-sont transmis, sans sa référence ni les coordonnées de l’acheteur, pour savoir quelles sources de
-visite mènent à des ventes. » / “Order tracking pages are not measured: after a payment, only the
-order’s amount and currency are sent, without its reference or the buyer’s details, to know which
-sources of visits lead to sales.”).
 
 ## Sécurité du back-office
 
@@ -174,5 +369,4 @@ sources of visits lead to sales.”).
   usage unique valable 24 heures, jamais journalisé.
 
 Les règles TypeScript et ESLint sont décrites dans [CODE_QUALITY.md](CODE_QUALITY.md), le
-système de design dans [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) et les commandes dans
-[COMMERCE.md](COMMERCE.md).
+système de design dans [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).

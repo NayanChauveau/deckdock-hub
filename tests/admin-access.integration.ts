@@ -54,7 +54,7 @@ try {
     '/api/media',
   ])
     assert.equal((await get(path)).status, 200, `${path} lisible anonymement`)
-  assert.equal((await get('/api/globals/order-settings')).status, 403)
+  assert.equal((await get('/api/customers')).status, 403)
   assert.equal((await get('/api/users')).status, 403)
 
   // Password only, not enrolled: held back everywhere except its own account document.
@@ -65,15 +65,18 @@ try {
     [a.id],
     'Seul son propre compte pendant la configuration',
   )
-  for (const path of ['/api/globals/order-settings', '/api/orders', '/api/customer-photos'])
-    assert.equal((await get(path, aPassword)).status, 403, `${path} refusé sans TOTP`)
+  assert.equal(
+    (await get('/api/customers', aPassword)).status,
+    403,
+    'Comptes visiteurs refusés sans TOTP',
+  )
   assert.equal(
     (await post('/api/globals/site-content', aPassword, { title: 'Interdit' })).status,
     403,
     'Écriture refusée sans TOTP',
   )
   assert.notEqual(
-    (await get('/api/payload-jobs/run?queue=commerce', aPassword)).status,
+    (await get('/api/payload-jobs/run?queue=accounts', aPassword)).status,
     200,
     'Jobs refusés sans TOTP',
   )
@@ -98,8 +101,8 @@ try {
   const aSession = await totpLogin(origin, a.email, a.password)
   assert.ok(await secretOf(a.id), 'Clé enregistrée côté serveur')
   assert.equal((await get('/api/users', aSession.cookie)).status, 200)
-  assert.equal((await get('/api/globals/order-settings', aSession.cookie)).status, 200)
-  assert.equal((await get('/api/payload-jobs/run?queue=commerce', aSession.cookie)).status, 200)
+  assert.equal((await get('/api/customers', aSession.cookie)).status, 200)
+  assert.equal((await get('/api/payload-jobs/run?queue=accounts', aSession.cookie)).status, 200)
   assert.equal((await get('/admin', aSession.cookie)).status, 200)
   assert.ok(
     !(await (await get('/fr', aSession.cookie)).text()).includes(messages.fr.maintenanceTitle),
@@ -108,7 +111,7 @@ try {
   // Enrolled, new password session: verify view, wrong code refused, right code accepted.
   const bFirst = await totpLogin(origin, b.email, b.password)
   const bPassword = await passwordLogin(origin, b.email, b.password)
-  assert.equal((await get('/api/globals/order-settings', bPassword)).status, 403)
+  assert.equal((await get('/api/customers', bPassword)).status, 403)
   const toVerify = await get('/admin', bPassword)
   assert.match(toVerify.headers.get('location') ?? '', /\/admin\/verify-totp/)
   const wrongCode = String((Number(totpCode(bFirst.secret)) + 500_000) % 1_000_000).padStart(6, '0')
@@ -121,7 +124,7 @@ try {
     false,
   )
   const bSession = await totpLogin(origin, b.email, b.password, bFirst.secret)
-  assert.equal((await get('/api/globals/order-settings', bSession.cookie)).status, 200)
+  assert.equal((await get('/api/customers', bSession.cookie)).status, 200)
 
   // Enrolled account, password only: cannot enrol another device over the existing secret.
   const bSecret = await secretOf(b.id)
@@ -163,7 +166,7 @@ try {
   assert.equal(recoveryBody.delivery, 'link', 'Mode simulé : lien remis à l’administrateur')
   assert.equal(await secretOf(b.id), null, 'Clé effacée')
   assert.equal(
-    (await get('/api/globals/order-settings', bSession.cookie)).status,
+    (await get('/api/customers', bSession.cookie)).status,
     403,
     'Les sessions de la personne réinitialisée sont fermées',
   )
@@ -186,7 +189,7 @@ try {
   // The old TOTP cookie over the fresh session: no secret any more, so it counts for nothing.
   const oldTotp = present(/payload-totp=[^;]+/.exec(bSession.cookie)?.[0])
   const replayed = `payload-token=${present(setCookie(chosen, 'payload-token'))}; ${oldTotp}`
-  assert.equal((await get('/api/globals/order-settings', replayed)).status, 403)
+  assert.equal((await get('/api/customers', replayed)).status, 403)
   assert.equal(
     (await post('/api/users/invite', replayed, { email: 'replay@example.test', name: 'X' })).status,
     403,
@@ -241,9 +244,9 @@ try {
     (await get('/admin', inviteePassword)).headers.get('location') ?? '',
     /\/admin\/setup-totp/,
   )
-  assert.equal((await get('/api/globals/order-settings', inviteePassword)).status, 403)
+  assert.equal((await get('/api/customers', inviteePassword)).status, 403)
   const invitee = await totpLogin(origin, 'invite.http@example.test', invitePassword)
-  assert.equal((await get('/api/globals/order-settings', invitee.cookie)).status, 200)
+  assert.equal((await get('/api/customers', invitee.cookie)).status, 200)
 
   await payload.updateGlobal({ slug: 'site-settings', data: { maintenance: false } })
   console.log(

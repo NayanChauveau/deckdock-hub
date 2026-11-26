@@ -49,6 +49,8 @@ Object.assign(base, {
   NEXT_DIST_DIR: build,
   NEXT_TSCONFIG_PATH: `.test-tsconfig-${id}.json`,
   MEDIA_DIR: join(directory, 'media'),
+  // DeckDock hub: uploaded decks (/data/hub in production).
+  HUB_DATA_DIR: join(directory, 'hub'),
   APP_URL: 'http://127.0.0.1:3201',
   DATABASE_URL: 'postgresql://build:build@127.0.0.1:1/build_test',
 })
@@ -166,6 +168,23 @@ async function withServer(mode, env, action) {
     await stop(server)
   }
 }
+/**
+ * The interpreter of the deckdock checker (Python >= 3.13, as in the image): HUB_PYTHON when set,
+ * otherwise the first of python3.14, python3.13 and python3 that is recent enough.
+ */
+async function hubPython() {
+  const candidates = [base.HUB_PYTHON, 'python3.14', 'python3.13', 'python3'].filter(Boolean)
+  for (const candidate of candidates) {
+    try {
+      await capture(candidate, [
+        '-c',
+        'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)',
+      ])
+      return candidate
+    } catch {}
+  }
+  throw new Error(`Python >= 3.13 introuvable (${candidates.join(', ')}) : définir HUB_PYTHON`)
+}
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => {
     interrupted = true
@@ -249,6 +268,8 @@ try {
         'socle',
         'commerce',
         'accounts',
+        'decks',
+        'decks_http',
         'accounts_http',
         'migration',
         'public',
@@ -304,6 +325,12 @@ try {
       await payload(['run', 'tests/accounts.integration.ts'], withoutTotp(environment('accounts')))
     },
     ['tests/accounts.integration.ts'],
+  )
+  await stage(
+    'database',
+    'Intégration decks : pseudos, decks, jetons de publication, accès et versions immuables',
+    () => payload(['run', 'tests/decks.integration.ts'], withoutTotp(environment('decks'))),
+    ['tests/decks.integration.ts'],
   )
   await stage('database', 'Migrations : base vide migrée, aucune migration en attente', () =>
     payload(['run', 'tests/migrations.integration.ts'], environment('migration')),
@@ -376,6 +403,38 @@ try {
   )
   await stage(
     'web',
+    'Decks : API de publication, service au plugin et plugin réel (build de production)',
+    async () => {
+      const env = {
+        ...environment('decks_http'),
+        HUB_DATA_DIR: join(directory, 'decks-hub'),
+        // Small enough to send a larger body quickly; the valid test archives weigh a few KiB.
+        HUB_MAX_UPLOAD_BYTES: String(1024 * 1024),
+        HUB_PYTHON: await hubPython(),
+        PYTHONPATH: resolve('vendor/deckdock'),
+      }
+      // The site's settings, so that the catalogue script can open the site (maintenance stays on).
+      await payload(['run', 'src/scripts/seed.ts'], withoutTotp(env))
+      await withServer('start', env, async (env) => {
+        await payload(['run', 'tests/decks.http.ts'], withoutTotp(env))
+        // Reads back what it publishes, then runs deckdock/addon (../deckdock) when present.
+        const addon = resolve(base.DECKDOCK_ADDON_SRC || '../deckdock/addon/src')
+        if (!existsSync(join(addon, 'deckdock_addon', 'sources.py')))
+          console.log(`  SKIP test réel du plugin : ${addon} absent (dépôt deckdock à côté)`)
+        await payload(['run', 'tests/decks.serve.http.ts'], withoutTotp(env))
+        // The catalogue, the deck page and the card preview (turns maintenance off).
+        await payload(['run', 'tests/decks.catalogue.http.ts'], withoutTotp(env))
+      })
+    },
+    [
+      'tests/decks.http.ts',
+      'tests/decks.serve.http.ts',
+      'tests/decks.addon.test.py',
+      'tests/decks.catalogue.http.ts',
+    ],
+  )
+  await stage(
+    'web',
     'Visiteur sur /admin, double authentification contournée (administrateur local, next dev)',
     async () => {
       // The local administrator's bypass needs next dev and a local database named *_dev.
@@ -435,6 +494,10 @@ try {
         DEMO_ORDER_FILE: join(directory, 'browser-order.json'),
         // The visitor emails of the account journey (tests/e2e/accounts.spec.ts); development server.
         ACCOUNTS_TEST_MAILBOX: join(directory, 'browser-mailbox.jsonl'),
+        // The author journey publishes through the API (tests/e2e/decks-author.spec.ts).
+        ...(existsSync('tests/e2e/decks-author.spec.ts')
+          ? { HUB_PYTHON: await hubPython(), PYTHONPATH: resolve('vendor/deckdock') }
+          : {}),
       }
       // The demo order of the order journey (tests/e2e/orders.spec.ts), while orders is kept.
       if (existsSync('src/scripts/commerce-demo.ts'))
@@ -443,6 +506,9 @@ try {
       // account journey and the public pages are tested as visitors see them.
       await payload(['run', 'src/scripts/seed.ts'], withoutTotp(env))
       await payload(['run', 'tests/performance.setup.ts'], withoutTotp(env))
+      // The published decks of the catalogue journey (tests/e2e/decks-catalogue.spec.ts).
+      if (existsSync('tests/e2e/decks-catalogue.setup.ts'))
+        await payload(['run', 'tests/e2e/decks-catalogue.setup.ts'], withoutTotp(env))
       await withServer('dev', env, (env) =>
         run(
           'node',

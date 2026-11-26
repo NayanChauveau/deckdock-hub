@@ -71,12 +71,10 @@ export interface Config {
     users: User;
     media: Media;
     customers: Customer;
-    orders: Order;
-    'delivery-countries': DeliveryCountry;
-    'payment-events': PaymentEvent;
-    'email-outbox': EmailOutbox;
-    'commerce-rate-limits': CommerceRateLimit;
-    'customer-photos': CustomerPhoto;
+    authors: Author;
+    decks: Deck;
+    editions: Edition;
+    versions: Version;
     'totp-attempts': TotpAttempt;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
@@ -89,12 +87,10 @@ export interface Config {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     customers: CustomersSelect<false> | CustomersSelect<true>;
-    orders: OrdersSelect<false> | OrdersSelect<true>;
-    'delivery-countries': DeliveryCountriesSelect<false> | DeliveryCountriesSelect<true>;
-    'payment-events': PaymentEventsSelect<false> | PaymentEventsSelect<true>;
-    'email-outbox': EmailOutboxSelect<false> | EmailOutboxSelect<true>;
-    'commerce-rate-limits': CommerceRateLimitsSelect<false> | CommerceRateLimitsSelect<true>;
-    'customer-photos': CustomerPhotosSelect<false> | CustomerPhotosSelect<true>;
+    authors: AuthorsSelect<false> | AuthorsSelect<true>;
+    decks: DecksSelect<false> | DecksSelect<true>;
+    editions: EditionsSelect<false> | EditionsSelect<true>;
+    versions: VersionsSelect<false> | VersionsSelect<true>;
     'totp-attempts': TotpAttemptsSelect<false> | TotpAttemptsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
@@ -108,14 +104,12 @@ export interface Config {
   fallbackLocale: ('false' | 'none' | 'null') | false | null | ('fr' | 'en') | ('fr' | 'en')[];
   globals: {
     'site-content': SiteContent;
-    'order-settings': OrderSetting;
     'site-settings': SiteSetting;
     'legal-pages': LegalPage;
     'payload-jobs-stats': PayloadJobsStat;
   };
   globalsSelect: {
     'site-content': SiteContentSelect<false> | SiteContentSelect<true>;
-    'order-settings': OrderSettingsSelect<false> | OrderSettingsSelect<true>;
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'legal-pages': LegalPagesSelect<false> | LegalPagesSelect<true>;
     'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
@@ -128,7 +122,6 @@ export interface Config {
   jobs: {
     tasks: {
       'accounts-orphan-sweep': TaskAccountsOrphanSweep;
-      'commerce-maintenance': TaskCommerceMaintenance;
       inline: {
         input: unknown;
         output: unknown;
@@ -249,42 +242,59 @@ export interface Customer {
   collection: 'customers';
 }
 /**
- * Paiements confirmés exclusivement par Stripe. Le remboursement reste manuel dans Stripe ; les webhooks synchronisent le statut. Les dates annoncées sont conservées.
+ * Pseudos publics des auteurs. Un pseudo reste réservé après la suppression du compte.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "orders".
+ * via the `definition` "authors".
  */
-export interface Order {
+export interface Author {
   id: number;
-  paymentStatus: 'pending' | 'paid' | 'failed' | 'expired' | 'partially_refunded' | 'refunded';
+  customer?: (number | null) | Customer;
+  handle: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "decks".
+ */
+export interface Deck {
+  id: number;
+  author: number | Author;
+  deckId: string;
+  status: 'pending' | 'approved' | 'hidden';
+  approvedAt?: string | null;
   /**
-   * Passer à « Expédié » envoie aussitôt l’email d’expédition au client (avec le numéro de suivi s’il est rempli). « Annulé » envoie un email d’annulation mais ne rembourse pas : le remboursement se fait dans Stripe.
+   * Obligatoire pour masquer un deck. Visible par son auteur.
    */
-  fulfillmentStatus: 'awaiting_payment' | 'queued' | 'in_progress' | 'ready' | 'shipped' | 'cancelled';
-  /**
-   * À remplir avant de passer la commande à « Expédié » : il figure dans l’email d’expédition.
-   */
-  trackingNumber?: string | null;
-  /**
-   * Indications fournies lors de la commande, distinctes de la note interne.
-   */
-  customerComment?: string | null;
-  internalNote?: string | null;
-  customer: {
-    name: string;
-    email: string;
-    address: string;
-    address2?: string | null;
-    postalCode: string;
-    city: string;
-    country: string;
-  };
-  shippedAt?: string | null;
-  reference: string;
-  attemptId: string;
-  locale: 'fr' | 'en';
-  kind: string;
-  lines:
+  hiddenReason?: string | null;
+  tokenHash?: string | null;
+  tokenLastUsedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "editions".
+ */
+export interface Edition {
+  id: number;
+  deck: number | Deck;
+  code: string;
+  latestVersion?: (number | null) | Version;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "versions".
+ */
+export interface Version {
+  id: number;
+  edition: number | Edition;
+  version: string;
+  receivedAt: string;
+  summary:
     | {
         [k: string]: unknown;
       }
@@ -293,17 +303,7 @@ export interface Order {
     | number
     | boolean
     | null;
-  itemsCents?: number | null;
-  shippingCents?: number | null;
-  totalCents?: number | null;
-  currency: string;
-  paymentSessionId?: string | null;
-  paymentId?: string | null;
-  paymentExpiresAt?: string | null;
-  paidAt?: string | null;
-  termsVersion?: string | null;
-  termsAcceptedAt?: string | null;
-  history?:
+  preview?:
     | {
         [k: string]: unknown;
       }
@@ -312,338 +312,18 @@ export interface Order {
     | number
     | boolean
     | null;
+  files:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  deckJsonSha256: string;
   updatedAt: string;
   createdAt: string;
-}
-/**
- * Les pays où la boutique livre. Seuls les pays ouverts à la commande sont proposés au client.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "delivery-countries".
- */
-export interface DeliveryCountry {
-  id: number;
-  name?: string | null;
-  country:
-    | 'AF'
-    | 'ZA'
-    | 'AL'
-    | 'DZ'
-    | 'DE'
-    | 'AD'
-    | 'AO'
-    | 'AI'
-    | 'AQ'
-    | 'AG'
-    | 'SA'
-    | 'AR'
-    | 'AM'
-    | 'AW'
-    | 'AU'
-    | 'AT'
-    | 'AZ'
-    | 'BS'
-    | 'BH'
-    | 'BD'
-    | 'BB'
-    | 'BE'
-    | 'BZ'
-    | 'BJ'
-    | 'BM'
-    | 'BT'
-    | 'BY'
-    | 'BO'
-    | 'BA'
-    | 'BW'
-    | 'BR'
-    | 'BN'
-    | 'BG'
-    | 'BF'
-    | 'BI'
-    | 'KH'
-    | 'CM'
-    | 'CA'
-    | 'CV'
-    | 'CL'
-    | 'CN'
-    | 'CY'
-    | 'CO'
-    | 'KM'
-    | 'CG'
-    | 'CD'
-    | 'KP'
-    | 'KR'
-    | 'CR'
-    | 'CI'
-    | 'HR'
-    | 'CU'
-    | 'CW'
-    | 'DK'
-    | 'DJ'
-    | 'DM'
-    | 'EG'
-    | 'AE'
-    | 'EC'
-    | 'ER'
-    | 'ES'
-    | 'EE'
-    | 'SZ'
-    | 'VA'
-    | 'US'
-    | 'ET'
-    | 'FJ'
-    | 'FI'
-    | 'FR'
-    | 'GA'
-    | 'GM'
-    | 'GE'
-    | 'GS'
-    | 'GH'
-    | 'GI'
-    | 'GR'
-    | 'GD'
-    | 'GL'
-    | 'GP'
-    | 'GU'
-    | 'GT'
-    | 'GG'
-    | 'GN'
-    | 'GQ'
-    | 'GW'
-    | 'GY'
-    | 'GF'
-    | 'HT'
-    | 'HN'
-    | 'HU'
-    | 'BV'
-    | 'CX'
-    | 'IM'
-    | 'NF'
-    | 'AX'
-    | 'KY'
-    | 'CC'
-    | 'CK'
-    | 'FO'
-    | 'HM'
-    | 'FK'
-    | 'MP'
-    | 'MH'
-    | 'UM'
-    | 'PN'
-    | 'SB'
-    | 'TC'
-    | 'VG'
-    | 'VI'
-    | 'IN'
-    | 'ID'
-    | 'IQ'
-    | 'IR'
-    | 'IE'
-    | 'IS'
-    | 'IL'
-    | 'IT'
-    | 'JM'
-    | 'JP'
-    | 'JE'
-    | 'JO'
-    | 'KZ'
-    | 'KE'
-    | 'KG'
-    | 'KI'
-    | 'KW'
-    | 'RE'
-    | 'LA'
-    | 'LS'
-    | 'LV'
-    | 'LB'
-    | 'LR'
-    | 'LY'
-    | 'LI'
-    | 'LT'
-    | 'LU'
-    | 'MK'
-    | 'MG'
-    | 'MY'
-    | 'MW'
-    | 'MV'
-    | 'ML'
-    | 'MT'
-    | 'MA'
-    | 'MQ'
-    | 'MU'
-    | 'MR'
-    | 'YT'
-    | 'MX'
-    | 'FM'
-    | 'MD'
-    | 'MC'
-    | 'MN'
-    | 'ME'
-    | 'MS'
-    | 'MZ'
-    | 'MM'
-    | 'NA'
-    | 'NR'
-    | 'NP'
-    | 'NI'
-    | 'NE'
-    | 'NG'
-    | 'NU'
-    | 'NO'
-    | 'NC'
-    | 'NZ'
-    | 'OM'
-    | 'UG'
-    | 'UZ'
-    | 'PK'
-    | 'PW'
-    | 'PA'
-    | 'PG'
-    | 'PY'
-    | 'NL'
-    | 'BQ'
-    | 'PE'
-    | 'PH'
-    | 'PL'
-    | 'PF'
-    | 'PR'
-    | 'PT'
-    | 'QA'
-    | 'HK'
-    | 'MO'
-    | 'CF'
-    | 'DO'
-    | 'RO'
-    | 'GB'
-    | 'RU'
-    | 'RW'
-    | 'EH'
-    | 'BL'
-    | 'KN'
-    | 'SM'
-    | 'MF'
-    | 'SX'
-    | 'PM'
-    | 'VC'
-    | 'SH'
-    | 'LC'
-    | 'SV'
-    | 'WS'
-    | 'AS'
-    | 'ST'
-    | 'SN'
-    | 'RS'
-    | 'SC'
-    | 'SL'
-    | 'SG'
-    | 'SK'
-    | 'SI'
-    | 'SO'
-    | 'SD'
-    | 'SS'
-    | 'LK'
-    | 'SE'
-    | 'CH'
-    | 'SR'
-    | 'SJ'
-    | 'SY'
-    | 'TJ'
-    | 'TW'
-    | 'TZ'
-    | 'TD'
-    | 'CZ'
-    | 'TF'
-    | 'IO'
-    | 'PS'
-    | 'TH'
-    | 'TL'
-    | 'TG'
-    | 'TK'
-    | 'TO'
-    | 'TT'
-    | 'TN'
-    | 'TM'
-    | 'TR'
-    | 'TV'
-    | 'UA'
-    | 'UY'
-    | 'VU'
-    | 'VE'
-    | 'VN'
-    | 'WF'
-    | 'YE'
-    | 'ZM'
-    | 'ZW';
-  open?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payment-events".
- */
-export interface PaymentEvent {
-  id: number;
-  eventId: string;
-  eventType: string;
-  order?: (number | null) | Order;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "email-outbox".
- */
-export interface EmailOutbox {
-  id: number;
-  key: string;
-  order: number | Order;
-  kind: 'confirmation' | 'shipped' | 'owner_new_order' | 'cancelled' | 'refunded';
-  status: 'pending' | 'sent' | 'simulated' | 'failed';
-  attempts: number;
-  nextAttemptAt: string;
-  subject?: string | null;
-  /**
-   * Aperçu en mode simulation. Aucune photo jointe.
-   */
-  body?: string | null;
-  sentAt?: string | null;
-  lastError?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "commerce-rate-limits".
- */
-export interface CommerceRateLimit {
-  id: number;
-  key: string;
-  count: number;
-  expiresAt: string;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * Photos privées normalisées sans métadonnées. Import via le parcours de commande uniquement.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "customer-photos".
- */
-export interface CustomerPhoto {
-  id: number;
-  expiresAt: string;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -723,7 +403,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'accounts-orphan-sweep' | 'commerce-maintenance';
+        taskSlug: 'inline' | 'accounts-orphan-sweep';
         taskID: string;
         input?:
           | {
@@ -756,7 +436,7 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'accounts-orphan-sweep' | 'commerce-maintenance') | null;
+  taskSlug?: ('inline' | 'accounts-orphan-sweep') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -792,28 +472,20 @@ export interface PayloadLockedDocument {
         value: number | Customer;
       } | null)
     | ({
-        relationTo: 'orders';
-        value: number | Order;
+        relationTo: 'authors';
+        value: number | Author;
       } | null)
     | ({
-        relationTo: 'delivery-countries';
-        value: number | DeliveryCountry;
+        relationTo: 'decks';
+        value: number | Deck;
       } | null)
     | ({
-        relationTo: 'payment-events';
-        value: number | PaymentEvent;
+        relationTo: 'editions';
+        value: number | Edition;
       } | null)
     | ({
-        relationTo: 'email-outbox';
-        value: number | EmailOutbox;
-      } | null)
-    | ({
-        relationTo: 'commerce-rate-limits';
-        value: number | CommerceRateLimit;
-      } | null)
-    | ({
-        relationTo: 'customer-photos';
-        value: number | CustomerPhoto;
+        relationTo: 'versions';
+        value: number | Version;
       } | null);
   globalSlug?: string | null;
   user:
@@ -938,113 +610,54 @@ export interface CustomersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "orders_select".
+ * via the `definition` "authors_select".
  */
-export interface OrdersSelect<T extends boolean = true> {
-  paymentStatus?: T;
-  fulfillmentStatus?: T;
-  trackingNumber?: T;
-  customerComment?: T;
-  internalNote?: T;
-  customer?:
-    | T
-    | {
-        name?: T;
-        email?: T;
-        address?: T;
-        address2?: T;
-        postalCode?: T;
-        city?: T;
-        country?: T;
-      };
-  shippedAt?: T;
-  reference?: T;
-  attemptId?: T;
-  locale?: T;
-  kind?: T;
-  lines?: T;
-  itemsCents?: T;
-  shippingCents?: T;
-  totalCents?: T;
-  currency?: T;
-  paymentSessionId?: T;
-  paymentId?: T;
-  paymentExpiresAt?: T;
-  paidAt?: T;
-  termsVersion?: T;
-  termsAcceptedAt?: T;
-  history?: T;
+export interface AuthorsSelect<T extends boolean = true> {
+  customer?: T;
+  handle?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "delivery-countries_select".
+ * via the `definition` "decks_select".
  */
-export interface DeliveryCountriesSelect<T extends boolean = true> {
-  name?: T;
-  country?: T;
-  open?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payment-events_select".
- */
-export interface PaymentEventsSelect<T extends boolean = true> {
-  eventId?: T;
-  eventType?: T;
-  order?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "email-outbox_select".
- */
-export interface EmailOutboxSelect<T extends boolean = true> {
-  key?: T;
-  order?: T;
-  kind?: T;
+export interface DecksSelect<T extends boolean = true> {
+  author?: T;
+  deckId?: T;
   status?: T;
-  attempts?: T;
-  nextAttemptAt?: T;
-  subject?: T;
-  body?: T;
-  sentAt?: T;
-  lastError?: T;
+  approvedAt?: T;
+  hiddenReason?: T;
+  tokenHash?: T;
+  tokenLastUsedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "commerce-rate-limits_select".
+ * via the `definition` "editions_select".
  */
-export interface CommerceRateLimitsSelect<T extends boolean = true> {
-  key?: T;
-  count?: T;
-  expiresAt?: T;
+export interface EditionsSelect<T extends boolean = true> {
+  deck?: T;
+  code?: T;
+  latestVersion?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "customer-photos_select".
+ * via the `definition` "versions_select".
  */
-export interface CustomerPhotosSelect<T extends boolean = true> {
-  expiresAt?: T;
+export interface VersionsSelect<T extends boolean = true> {
+  edition?: T;
+  version?: T;
+  receivedAt?: T;
+  summary?: T;
+  preview?: T;
+  files?: T;
+  deckJsonSha256?: T;
   updatedAt?: T;
   createdAt?: T;
-  url?: T;
-  thumbnailURL?: T;
-  filename?: T;
-  mimeType?: T;
-  filesize?: T;
-  width?: T;
-  height?: T;
-  focalX?: T;
-  focalY?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1142,23 +755,6 @@ export interface SiteContent {
    * À défaut, l’image principale est utilisée. Format conseillé : 1200 × 630 px.
    */
   seoImage?: (number | null) | Media;
-  updatedAt?: string | null;
-  createdAt?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "order-settings".
- */
-export interface OrderSetting {
-  id: number;
-  /**
-   * Interrupteur de la vente. L’état complet de la boutique est affiché sur le tableau de bord.
-   */
-  enabled?: boolean | null;
-  /**
-   * Facultatif. Reçoit la référence, le contenu de la commande, le montant et un lien vers la commande dans l’administration, sans la photo.
-   */
-  ownerEmail?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -1292,17 +888,6 @@ export interface SiteContentSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "order-settings_select".
- */
-export interface OrderSettingsSelect<T extends boolean = true> {
-  enabled?: T;
-  ownerEmail?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  globalType?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
@@ -1369,14 +954,6 @@ export interface CollectionsWidget {
  * via the `definition` "TaskAccounts-orphan-sweep".
  */
 export interface TaskAccountsOrphanSweep {
-  input?: unknown;
-  output?: unknown;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "TaskCommerce-maintenance".
- */
-export interface TaskCommerceMaintenance {
   input?: unknown;
   output?: unknown;
 }

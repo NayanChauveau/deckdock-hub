@@ -2,6 +2,7 @@ import {
   Forbidden,
   type Access,
   type CollectionAfterDeleteHook,
+  type CollectionBeforeDeleteHook,
   type CollectionConfig,
   type Payload,
   type PayloadRequest,
@@ -73,6 +74,16 @@ const deleteAuthUserAfter =
     if (typeof authUserId === 'string' && authUserId) await deleteAuthUser(getAuth(), authUserId)
   }
 
+/** Hands the deleted customer's id to `beforeDelete`, with the deletion's request (transaction). */
+const beforeDeleteWith =
+  (
+    beforeDelete?: (args: { req: PayloadRequest; customerId: number }) => Promise<void>,
+  ): CollectionBeforeDeleteHook =>
+  async ({ id, req }) => {
+    const customerId = Number(id)
+    if (beforeDelete && Number.isSafeInteger(customerId)) await beforeDelete({ req, customerId })
+  }
+
 const never = () => false
 
 /**
@@ -106,12 +117,17 @@ const ownDocument: Access = ({ req }) => {
 export const customersCollection = (options: {
   isAdmin: (req: PayloadRequest) => boolean
   getAuth: () => Auth
+  /** Other modules' work before a customer is deleted, in the same transaction. */
+  beforeDelete?: (args: { req: PayloadRequest; customerId: number }) => Promise<void>
 }): CollectionConfig => ({
   slug: 'customers',
   labels: { singular: 'Client', plural: 'Clients' },
   auth: { disableLocalStrategy: true, strategies: [betterAuthStrategy(options.getAuth)] },
   endpoints: refusedAuthEndpoints,
-  hooks: { afterDelete: [deleteAuthUserAfter(options.getAuth)] },
+  hooks: {
+    beforeDelete: [beforeDeleteWith(options.beforeDelete)],
+    afterDelete: [deleteAuthUserAfter(options.getAuth)],
+  },
   admin: {
     useAsTitle: 'email',
     defaultColumns: ['email', 'createdAt'],

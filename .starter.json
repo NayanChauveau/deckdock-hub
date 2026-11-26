@@ -1,0 +1,10 @@
+{
+  "repository": "NayanChauveau/site-starter",
+  "version": "bc4ec802d356b58a14a7baf05de82f28a94c87d1",
+  "pieces": [
+    "deploy",
+    "core",
+    "accounts"
+  ],
+  "ignore": []
+}

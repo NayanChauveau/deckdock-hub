@@ -11,13 +11,14 @@ const security = [
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
   },
-  // Baseline for every response. The HTML pages (site and administration) also get the full policy,
-  // with a nonce per request, from src/proxy.ts (src/core/http/csp.ts); browsers enforce both.
-  {
-    key: 'Content-Security-Policy',
-    value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
-  },
 ]
+// Baseline for every response but the card previews. The HTML pages (site and administration) also
+// get the full policy, with a nonce per request, from src/proxy.ts (src/core/http/csp.ts); browsers
+// enforce both.
+const baselinePolicy = {
+  key: 'Content-Security-Policy',
+  value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+}
 
 export default withPayload({
   // No "X-Powered-By: Next.js, Payload" (withPayload adds it unless this is false).
@@ -46,6 +47,10 @@ export default withPayload({
   async headers() {
     return [
       { source: '/:path*', headers: security },
+      // DeckDock hub (decks module): a card preview (/preview/…) sets its own policy, with the hub's
+      // origin read at run time (src/modules/decks/adapters/http/preview-route.ts). A header set
+      // here would replace the route's, so the baseline policy skips that path.
+      { source: '/:path((?!preview/).*)', headers: [baselinePolicy] },
       // Never indexed, whatever PUBLIC_INDEXING says.
       { source: '/admin/:path*', headers: [noindex] },
       { source: '/admin', headers: [noindex] },
@@ -66,6 +71,18 @@ export default withPayload({
           {
             key: 'Content-Security-Policy',
             value: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; sandbox",
+          },
+        ],
+      },
+      // DeckDock hub (decks module): published decks and their media, served to the add-on
+      // (src/modules/decks/adapters/http/serve-route.ts). A header set here wins over the route's
+      // own, so the media policy is set here: an SVG or HTML file of a deck never runs.
+      {
+        source: '/d/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'none'; frame-ancestors 'none'; sandbox",
           },
         ],
       },

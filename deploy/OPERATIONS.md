@@ -59,6 +59,91 @@ ancienne image sans vérifier la compatibilité du schéma.
   client correspondant dans l’administration (« Clients », ce qui supprime aussi l’utilisateur
   Better Auth), puis cherche la cause (base, journaux autour de l’erreur).
 
+## Decks (module `decks`)
+
+Le volume **`hub-files`** (compose : `deckdock-hub-prod_hub-files`, monté sur `/data/hub`,
+`HUB_DATA_DIR`) contient les decks envoyés :
+
+- `blobs/<2 premiers caractères du sha256>/<sha256>` : les fichiers, adressés par leur contenu
+  (octets, 0444, jamais réécrits) ; la base (`versions.files`) dit quels fichiers forment une
+  version ;
+- `tmp/` : l’espace de travail des envois en cours (`publish-<uuid>`, `blob-<uuid>`), toujours
+  supprimé à la fin d’un envoi, réussi ou non. Un reste n’existe qu’après un arrêt brutal du
+  processus : le supprimer à la main est sans risque quand aucun envoi n’est en cours.
+
+Un envoi refusé ou interrompu peut occuper jusqu’à 100 Mo (compressé) plus 500 MiB (décompressé) de
+disque le temps du traitement. Les blobs d’un envoi dont l’enregistrement a échoué restent (orphelins,
+acceptés pour cette étape) ; ne rien supprimer sous `blobs/` sans comparer à la base.
+
+> **À RÉGLER AVANT LE PREMIER DÉPLOIEMENT.** `hub-files` n’est **pas sauvegardé** : il est géré par
+> compose, hors de la liste des volumes du kit de déploiement. Ni la sauvegarde d’avant déploiement
+> (`deploy/release.py`), ni la sauvegarde nocturne d’infra-traefik ne le contiennent. Sans lui, une
+> restauration de la base laisse des versions dont les fichiers manquent. Il faut l’entrée du site
+> dans le registre `sites.json` d’`infra-traefik`, déclarant ce volume, avant d’accepter de vrais
+> decks. Ce n’est pas fait (hors du périmètre du dépôt).
+
+### Modération
+
+- **Valider** : tableau de bord de l’administration (`/admin`), panneau des decks en attente,
+  bouton **Valider**. **Masquer** : même panneau, ou fiche du deck (collection « Decks »), avec une
+  **raison obligatoire**. Double authentification requise.
+- Un deck masqué : adresses `/d/…` en 410, publication refusée en 410, absent du catalogue, page
+  « Deck retiré ». Pour le rétablir, le valider de nouveau.
+- Un deck dont le compte a été supprimé (raison « Compte supprimé ») ne peut pas être rétabli : il
+  faut que l’auteur recrée un compte et un nouveau deck.
+- Le jeton d’un deck est révoqué à son masquage par suppression de compte. Autrement, l’auteur le
+  régénère ou le révoque depuis `/compte/decks`. Le hub ne garde que son empreinte et ne peut pas le
+  relire.
+
+### Limites et réponses d’erreur
+
+Les valeurs (archive de 100 Mo, 500 MiB et 20 000 fichiers, `deck.json` de 16 Mio, vérificateur à
+768 Mio d’espace d’adressage, envoi reçu en 120 s, 2 publications simultanées, 30 par deck et par 10
+minutes, routeur Traefik `-publish` à 30 par minute) sont dans le README, section « Limites ».
+
+Quotas par auteur (`src/modules/decks/domain/quotas.ts`) : 10 decks ; 3 versions au plus pour un
+deck en attente, jusqu’à sa validation ; 2 Gio stockés, comptés comme la somme des tailles des
+fichiers de chaque version (403 avec une entrée `quota`). Pour un auteur légitime qui atteint un
+quota, il n’y a pas de réglage : changer la constante demande un déploiement. `HUB_MAX_UPLOAD_BYTES` règle la taille de l’archive sans modifier le
+code. Des **429** sur `/api/publish/` viennent du compteur par deck (application) ou par IP
+(Traefik) ; des **503** de la file de 2 publications ; des **408** d’un envoi qui a duré plus de
+120 s ; des **403** des quotas. Un auteur peut relancer sa CI : les envois
+sont idempotents.
+
+### Journaux et surveillance
+
+- Un envoi interrompu par le client est journalisé en avertissement (`publish_upload_aborted`, avec
+  l’édition et la cause, jamais un chemin ni le jeton). Une erreur disque (`ENOSPC`, droits) est
+  journalisée en erreur avec une réponse 500 : vérifier l’espace du volume.
+- L’espace disque de `hub-files` n’est pas surveillé (le contrôle horaire est HTTP).
+- Un vérificateur à court de mémoire donne un 422 « deck.json is too complex » à l’auteur, sans
+  journal d’erreur ; un vérificateur tué (par exemple par le noyau) donne un 500 journalisé
+  `publish_failed`.
+
+> **À RÉGLER AVANT D’OUVRIR LES INSCRIPTIONS.** Mettre en place une alerte sur l’espace disque du VPS
+> (volume `hub-files` compris) : les quotas bornent chaque auteur (2 Gio), pas le nombre d’auteurs.
+> C’est une étape d’infrastructure du propriétaire, hors de ce dépôt (aucune modification manuelle
+> du VPS depuis ici).
+- La publication et le service `/d/…` restent ouverts pendant la maintenance du site.
+
+### Écarts avec l’image du starter
+
+Image `production` : Python 3.13 copié d’une image `python` épinglée, extensions de la bibliothèque
+standard sans bibliothèque partagée retirées, bibliothèque `deckdock` copiée dans `vendor/deckdock`
+(à mettre à jour avec `node scripts/vendor-deckdock.mjs`, puis committer), volume en écriture
+`hub-files`, conteneur `web` toujours en lecture seule. Détail : README, « Écarts avec l’image du
+starter ».
+
+### Service et aperçu
+
+`/d/<pseudo>/<deck-id>/…` est servi en flux depuis les blobs, avec `ETag` (sha256) et 304,
+`Cache-Control: public, max-age=300` pour `index.json` et `deck.json`, `public, max-age=31536000,
+immutable` pour les médias. Chaque réponse porte la CSP `default-src 'none'; frame-ancestors 'none';
+sandbox` et `nosniff`. Les médias ne sont jamais servis en `text/html`. L’aperçu des cartes
+(`/preview/…`) est un document par face, dans un `<iframe sandbox="allow-scripts">` d’origine
+opaque, avec sa propre CSP sans `script-src` : les scripts des cartes n’y tournent pas. `robots.txt`
+exclut `/d/` et `/preview/`.
+
 ## Notifications et limites
 
 Activer les notifications GitHub Actions pour les échecs dans les préférences

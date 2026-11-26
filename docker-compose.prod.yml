@@ -38,12 +38,15 @@ services:
       <<: *app-env
       JOBS_AUTORUN: 'true'
       PORT: ${SITE_PORT:?SITE_PORT requis}
+      # DeckDock hub: uploaded decks and their checked editions (hub-files volume below).
+      HUB_DATA_DIR: /data/hub
     restart: unless-stopped
     mem_limit: 1536m
     pids_limit: 256
     # Hardening: no privilege gain, no capability, read-only filesystem (the code also belongs to
-    # root, see Dockerfile). Writable: the media volume, and in memory the deploy's drain flag
-    # (/tmp/draining, deploy/release.py) and the Next.js caches, rebuilt after a restart.
+    # root, see Dockerfile). Writable: the media volume, the hub's files (/data/hub, DeckDock), and
+    # in memory the deploy's drain flag (/tmp/draining, deploy/release.py) and the Next.js caches,
+    # rebuilt after a restart.
     security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
     read_only: true
@@ -51,6 +54,9 @@ services:
       - /tmp:size=64m,mode=1777
       - /app/.next/cache:size=64m,uid=1001,gid=1001,mode=0700
       - /app/.next/server/route-cache:size=64m,uid=1001,gid=1001,mode=0700
+    volumes:
+      - media:/app/storage/media
+      - hub-files:/data/hub
     networks: [internal, traefik]
     depends_on:
       postgres:
@@ -105,6 +111,18 @@ services:
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.average=5'
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.period=1m'
       - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-auth-ratelimit.ratelimit.burst=5'
+      # DeckDock hub: deck publishing from authors' CI (POST /api/publish/<edition>), the costliest
+      # call (archive, checker). Its own per-IP bucket, not the auth one: a CI run publishes several
+      # editions in a row from one runner. The app also limits per deck token.
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST requis}`) && PathPrefix(`/api/publish/`)'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.priority=1000'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.entrypoints=websecure'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.tls.certresolver=le'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.service=${SITE_TRAEFIK_NAME}'
+      - 'traefik.http.routers.${SITE_TRAEFIK_NAME}-publish.middlewares=${SITE_TRAEFIK_NAME}-noindex,${SITE_TRAEFIK_NAME}-publish-ratelimit'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.average=30'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.period=1m'
+      - 'traefik.http.middlewares.${SITE_TRAEFIK_NAME}-publish-ratelimit.ratelimit.burst=10'
 
   postgres:
     image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
@@ -207,3 +225,6 @@ volumes:
   media:
     external: true
     name: ${SITE_VOLUME_MEDIA:?SITE_VOLUME_MEDIA requis}
+  # DeckDock hub: uploaded decks (HUB_DATA_DIR). Managed by compose (<project>_hub-files), outside
+  # the deploy kit's volume list: see README, « Écarts avec l’image du starter ».
+  hub-files:

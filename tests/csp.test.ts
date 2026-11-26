@@ -28,6 +28,8 @@ void test('public pages: scripts only through the nonce, nothing from outside', 
   assert.equal(directive(policy, 'base-uri'), "base-uri 'self'")
   assert.equal(directive(policy, 'form-action'), "form-action 'self'")
   assert.equal(directive(policy, 'frame-ancestors'), "frame-ancestors 'self'")
+  // Only the site's own documents in frames (the sandboxed card previews of the decks module).
+  assert.equal(directive(policy, 'frame-src'), "frame-src 'self'")
   assert.equal(directive(policy, 'connect-src'), "connect-src 'self'")
   assert.equal(directive(policy, 'report-uri'), `report-uri ${CSP_REPORT_PATH}`)
   assert.equal(directive(policy, 'report-to'), 'report-to csp')
@@ -39,6 +41,7 @@ void test('public pages: scripts only through the nonce, nothing from outside', 
 void test('administration: the same, plus the pinned Monaco editor of the JSON fields', () => {
   const policy = contentSecurityPolicy({ nonce: 'abc', admin: true, dev: false })
   assert.equal(directive(policy, 'script-src'), `script-src 'self' 'nonce-abc' ${MONACO_CDN}`)
+  assert.equal(directive(policy, 'frame-src'), "frame-src 'none'")
   assert.ok(directive(policy, 'style-src').includes(MONACO_CDN))
   assert.ok(directive(policy, 'font-src').includes(MONACO_CDN))
   assert.ok(!policy.includes('unsafe-eval'))

@@ -48,14 +48,19 @@ try {
   // The placeholder legal texts of src/site, as `pnpm db:seed` loads them; never overwritten.
   assert.equal(await fillEmptyLegalPages(payload), true)
   assert.equal(await fillEmptyLegalPages(payload), false)
-  const blockedApi = () =>
-    fetch(`${origin}/api/commerce/access`, {
+  // A visitor's sign-in request (module accounts); an empty one, so that no email is ever sent.
+  const signIn = (cookie?: string) =>
+    fetch(`${origin}/api/auth/sign-in/magic-link`, {
       method: 'POST',
-      headers: { Origin: origin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reference: 'inconnue', token: 'inconnu' }),
+      headers: {
+        Origin: origin,
+        'Content-Type': 'application/json',
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      body: JSON.stringify({}),
     })
 
-  // Maintenance is on by default: visitors see the opening page and cannot order, administrators see the site.
+  // Maintenance is on by default: visitors see the opening page and cannot sign in, administrators see the site.
   const visitor = await (await fetch(`${origin}/fr`)).text()
   assert.ok(
     visitor.includes(messages.fr.maintenanceTitle),
@@ -64,9 +69,9 @@ try {
   assert.ok(!visitor.includes('Portrait de test français'), 'Contenu masqué pendant la maintenance')
   const legalDuringMaintenance = await (await fetch(`${origin}/en/privacy`)).text()
   assert.ok(legalDuringMaintenance.includes(messages.en.maintenanceTitle))
-  const blockedOrder = await blockedApi()
-  assert.equal(blockedOrder.status, 503)
-  assert.deepEqual(await blockedOrder.json(), { error: 'maintenance' })
+  const blockedSignIn = await signIn()
+  assert.equal(blockedSignIn.status, 503)
+  assert.deepEqual(await blockedSignIn.json(), { error: 'maintenance' })
   assert.equal((await fetch(`${origin}/api/health`)).status, 200, 'Santé joignable')
   // The password alone does not open the shop during maintenance: the TOTP code is required too.
   const passwordOnly = await passwordLogin(origin, account.email, password)
@@ -80,12 +85,11 @@ try {
   const adminView = await (await fetch(`${origin}/fr`, { headers: { Cookie: adminCookie } })).text()
   assert.ok(adminView.includes('Portrait de test français'), 'Site réel pour un administrateur')
   assert.ok(adminView.includes('Mode maintenance'), 'Bandeau de rappel pour l’administrateur')
-  const adminOrder = await fetch(`${origin}/api/commerce/access`, {
-    method: 'POST',
-    headers: { Cookie: adminCookie, Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reference: 'inconnue', token: 'inconnu' }),
-  })
-  assert.notEqual(adminOrder.status, 503, 'API de commande ouverte à l’administrateur')
+  assert.notEqual(
+    (await signIn(adminCookie)).status,
+    503,
+    'API des comptes visiteurs ouverte à l’administrateur',
+  )
   await payload.updateGlobal({ ...options, slug: 'site-settings', data: { maintenance: false } })
   assert.equal(
     (await readPublicSite(payload, 'en')).content.title,
