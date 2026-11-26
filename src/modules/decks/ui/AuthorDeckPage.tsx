@@ -3,10 +3,11 @@ import { notFound, redirect } from 'next/navigation'
 import { signInPath } from '@/modules/accounts/paths'
 import { deckMessages } from '../messages'
 import { authorSpacePath } from '../paths'
-import { authorDeck, DecksError, editionAddress } from '../server'
+import { authorDeck, DecksError } from '../server'
 import { regenerateTokenAction, revokeTokenAction } from './actions'
-import { CopyButton } from './CopyButton'
-import { accountPage, authorMetadata, formatDate } from './page-shell'
+import { DeckEditions } from './DeckEditions'
+import { formatDate } from './format'
+import { accountPage, authorMetadata } from './page-shell'
 import { signedInCustomer, sitePayload } from './session'
 import { TokenPanel } from './TokenPanel'
 
@@ -34,7 +35,6 @@ export default async function AuthorDeckPage(props: Props) {
     const origin = payload.config.serverURL
     const messages = deckMessages[locale]
     const t = messages.deck
-    const address = (edition: string) => editionAddress(origin, author.handle, deck.deckId, edition)
     return (
       <main className="commerce-page flex flex-col gap-8">
         <p>
@@ -57,55 +57,13 @@ export default async function AuthorDeckPage(props: Props) {
           )}
         </section>
 
-        <section aria-labelledby="deck-editions" className="flex flex-col gap-4">
-          <h2 id="deck-editions">{t.editionsTitle}</h2>
-          {editions.length ? (
-            editions.map((edition) => (
-              <div key={edition.code} className="flex flex-col gap-3">
-                <h3>{edition.code}</h3>
-                <p>{t.testAddress}</p>
-                <p>
-                  <code className="break-all">{address(edition.code)}</code>
-                </p>
-                <CopyButton
-                  value={address(edition.code)}
-                  label={t.copyAddress}
-                  copied={messages.token.copied}
-                  failed={messages.token.copyFailed}
-                />
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <caption className="sr-only">{t.versionsCaption(edition.code)}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t.receivedAt}</th>
-                        <th scope="col">{t.version}</th>
-                        <th scope="col">{t.notes}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {edition.versions.map((version) => (
-                        <tr key={version.version}>
-                          <td>{formatDate(locale, version.receivedAt)}</td>
-                          <td className="break-all">{version.version}</td>
-                          <td>{version.notes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))
-          ) : (
-            <>
-              <p>{t.noEditions}</p>
-              <p>{t.testAddressPattern}</p>
-              <p>
-                <code className="break-all">{address('<edition>')}</code>
-              </p>
-            </>
-          )}
-        </section>
+        <DeckEditions
+          locale={locale}
+          origin={origin}
+          handle={author.handle}
+          deckId={deck.deckId}
+          editions={editions}
+        />
 
         <section aria-labelledby="deck-token" className="flex flex-col gap-4">
           <h2 id="deck-token">{messages.token.title}</h2>

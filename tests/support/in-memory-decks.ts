@@ -87,12 +87,14 @@ export function inMemoryDecksStore() {
       if (review.status === 'approved') deck.approvedAt = new Date()
       return view(deck)
     },
-    retire: async (id, reason) => {
-      const deck = byId(id)
-      if (!deck) return
-      deck.status = 'hidden'
-      deck.hiddenReason = reason
-      deck.tokenHash = null
+    retireDecksOfAuthor: async (authorId, reason) => {
+      const own = decks.filter((deck) => deck.authorId === authorId)
+      for (const deck of own) {
+        deck.status = 'hidden'
+        deck.hiddenReason = reason
+        deck.tokenHash = null
+      }
+      return own.length
     },
     pendingDecks: async () =>
       decks

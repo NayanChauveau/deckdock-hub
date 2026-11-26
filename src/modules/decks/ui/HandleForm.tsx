@@ -4,8 +4,8 @@ import type { Locale } from '@/core/i18n/locales'
 import { Button } from '@/core/ui/button'
 import { Notice } from '@/core/ui/feedback/Notice'
 import { TextField } from '@/core/ui/forms/TextField'
-import { deckMessages } from '../messages'
-import type { ActionError, HandleResult } from './results'
+import { deckMessages, failureText } from '../messages'
+import { failureOf, type ActionError, type HandleResult, type Failure } from './results'
 
 const fieldErrors = ['invalid_handle', 'reserved_handle', 'handle_taken', 'handle_already_chosen']
 type FieldError = 'invalid_handle' | 'reserved_handle' | 'handle_taken' | 'handle_already_chosen'
@@ -27,7 +27,7 @@ export function HandleForm({
   const id = useId()
   const [handle, setHandle] = useState('')
   const [fieldError, setFieldError] = useState<FieldError | null>(null)
-  const [failure, setFailure] = useState<'signed_out' | 'error' | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
@@ -42,7 +42,7 @@ export function HandleForm({
       const result = await choose(handle)
       if (result.ok) setFieldError(null)
       else if (isFieldError(result.error)) setFieldError(result.error)
-      else setFailure(result.error === 'signed_out' ? 'signed_out' : 'error')
+      else setFailure(failureOf(result.error))
     } catch {
       setFailure('error')
     } finally {
@@ -74,11 +74,7 @@ export function HandleForm({
           {busy ? messages.common.busy : t.handleSubmit}
         </Button>
       </div>
-      {failure && (
-        <Notice tone="error">
-          {failure === 'signed_out' ? messages.common.signedOut : messages.common.error}
-        </Notice>
-      )}
+      {failure && <Notice tone="error">{failureText(messages, failure)}</Notice>}
     </form>
   )
 }

@@ -11,6 +11,7 @@ import {
 } from '../src/modules/decks/application/review'
 import { authorDeck, authorSpace } from '../src/modules/decks/application/author-space'
 import { DecksError } from '../src/modules/decks/domain/errors'
+import { runAuthorAction, type AuthorActionEnv } from '../src/modules/decks/ui/author-action'
 import { inMemoryDecksStore } from './support/in-memory-decks'
 import { present } from './support/present'
 
@@ -157,4 +158,41 @@ void test('authorSpace and authorDeck show only the customer’s own decks', asy
   assert.equal(await code(authorDeck(d, 1, 'other')), 'not_found')
   assert.equal(await code(authorDeck(d, 2, 'kanji')), 'not_found')
   assert.equal(await code(authorDeck(d, 3, 'kanji')), 'not_found')
+})
+
+void test('author actions: refused during maintenance or without a session, rules as codes', async () => {
+  const reported: string[] = []
+  const env = (blocked: boolean, customer: number | null): AuthorActionEnv<string> => ({
+    visitorBlocked: async () => blocked,
+    payload: async () => 'payload',
+    customer: async () => customer,
+    report: (_error, action) => {
+      reported.push(action)
+    },
+  })
+  const calls: string[] = []
+  const action = async (payload: string, customerId: number) => {
+    calls.push(`${payload}:${String(customerId)}`)
+    return { ok: true as const }
+  }
+  assert.deepEqual(await runAuthorAction(env(true, 1), 'a', action), {
+    ok: false,
+    error: 'maintenance',
+  })
+  assert.deepEqual(await runAuthorAction(env(false, null), 'a', action), {
+    ok: false,
+    error: 'signed_out',
+  })
+  assert.deepEqual(calls, [], 'nothing runs while visitors are kept out or signed out')
+  assert.deepEqual(await runAuthorAction(env(false, 7), 'a', action), { ok: true })
+  assert.deepEqual(calls, ['payload:7'])
+  const refused = await runAuthorAction(env(false, 7), 'a', async () => {
+    throw new DecksError('handle_taken')
+  })
+  assert.deepEqual(refused, { ok: false, error: 'handle_taken' })
+  const broken = await runAuthorAction(env(false, 7), 'create-deck', async () => {
+    throw new Error('database down')
+  })
+  assert.deepEqual(broken, { ok: false, error: 'unexpected' })
+  assert.deepEqual(reported, ['create-deck'])
 })

@@ -37,6 +37,7 @@ export const accountMessages = {
     account: {
       title: 'Mon compte',
       signedInAs: 'Vous êtes connecté avec l’adresse',
+      linksLabel: 'Pages de votre compte',
       sessionsTitle: 'Connexion',
       signOut: 'Se déconnecter',
       signOutEverywhere: 'Se déconnecter de tous mes appareils',
@@ -97,6 +98,7 @@ export const accountMessages = {
     account: {
       title: 'My account',
       signedInAs: 'You are signed in with the address',
+      linksLabel: 'Your account pages',
       sessionsTitle: 'Signing out',
       signOut: 'Sign out',
       signOutEverywhere: 'Sign out of all my devices',

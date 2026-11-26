@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { HandleForm } from '../src/modules/decks/ui/HandleForm'
 import { NewDeckForm } from '../src/modules/decks/ui/NewDeckForm'
 import { TokenPanel } from '../src/modules/decks/ui/TokenPanel'
+import { DeckEditions } from '../src/modules/decks/ui/DeckEditions'
 import { deckMessages } from '../src/modules/decks/messages'
 
 const TOKEN = `ddk_${'A'.repeat(43)}`
@@ -175,4 +176,58 @@ void test('a failed token action says so and shows no token', async () => {
   await waitFor(() => {
     assert.equal(screen.getByRole('alert').textContent, t.common.signedOut)
   })
+})
+
+void test('during maintenance, an author action says so (English)', async () => {
+  const t = deckMessages.en
+  render(<HandleForm locale="en" choose={async () => ({ ok: false, error: 'maintenance' })} />)
+  fireEvent.change(screen.getByRole('textbox', { name: t.space.handleLabel }), {
+    target: { value: 'alice' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: t.space.handleSubmit }))
+  assert.equal((await screen.findByRole('alert')).textContent, t.common.maintenance)
+})
+
+void test('before the first version, the test address pattern keeps <edition> as written', () => {
+  const t = deckMessages.fr.deck
+  render(
+    <DeckEditions
+      locale="fr"
+      origin="https://hub.example/"
+      handle="alice"
+      deckId="verbs"
+      editions={[]}
+    />,
+  )
+  assert.ok(screen.getByText(t.noEditions))
+  assert.ok(screen.getByText('https://hub.example/d/alice/verbs/<edition>/'))
+  assert.ok(!document.body.textContent.includes('%3C'))
+})
+
+void test('each edition shows its address and its versions, newest first', () => {
+  const t = deckMessages.en.deck
+  render(
+    <DeckEditions
+      locale="en"
+      origin="https://hub.example"
+      handle="alice"
+      deckId="verbs"
+      editions={[
+        {
+          code: 'en',
+          versions: [
+            { version: 'v2', receivedAt: new Date('2026-11-26T10:00:00Z'), notes: 12 },
+            { version: 'v1', receivedAt: new Date('2026-11-25T10:00:00Z'), notes: 10 },
+          ],
+        },
+      ]}
+    />,
+  )
+  assert.ok(screen.getByText('https://hub.example/d/alice/verbs/en/'))
+  const rows = screen.getAllByRole('row').slice(1)
+  assert.deepEqual(
+    rows.map((row) => row.textContent),
+    ['26 Nov 2026, 11:00v212', '25 Nov 2026, 11:00v110'],
+  )
+  assert.ok(screen.getByRole('button', { name: t.copyAddress }))
 })
