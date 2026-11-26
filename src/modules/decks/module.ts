@@ -13,10 +13,14 @@ export const decksModule: SiteModule = {
   collections: [Authors, Decks, Editions, Versions],
   // A deleted account's decks are hidden and their tokens revoked (adapters/payload/account-deletion.ts).
   extensions: { accounts: accountDeletion },
+  // The review panel: pending decks, "Valider" and "Masquer" (admin/PendingDecks.tsx).
+  dashboard: ['/modules/decks/admin/PendingDecks#PendingDecks'],
   migrations: ['20261125_224245_decks'],
   routes: [
     'src/app/(frontend)/api/publish/[edition]/route.ts',
     'src/app/(frontend)/d/[[...path]]/route.ts',
+    'src/app/(frontend)/[locale]/compte/decks/page.tsx',
+    'src/app/(frontend)/[locale]/compte/decks/[deckId]/page.tsx',
   ],
   files: [
     'tests/decks.addon.test.py',
@@ -26,9 +30,11 @@ export const decksModule: SiteModule = {
     'tests/decks.integration.ts',
     'tests/decks.publish.test.ts',
     'tests/decks.review.test.ts',
+    'tests/decks.ui.test.tsx',
     'tests/decks.serve.http.ts',
     'tests/decks.serve.test.ts',
     'tests/decks.workspace.test.ts',
+    'tests/e2e/decks-author.spec.ts',
     'tests/support/deck-archive.ts',
     'tests/support/in-memory-decks.ts',
   ],
