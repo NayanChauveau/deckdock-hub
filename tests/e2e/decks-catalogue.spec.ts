@@ -31,6 +31,36 @@ async function loadPreviews(page: Page) {
   await page.waitForLoadState('networkidle')
 }
 
+test('accueil : les decks récents validés, en clair et en sombre, sans débordement', async ({
+  page,
+}) => {
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.goto('/fr')
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Vos decks Anki, toujours à jour.' }),
+    ).toBeVisible()
+    // The author journey (decks-author.spec.ts) may have published decks of the same name.
+    const recent = page.getByRole('region', { name: 'À découvrir' })
+    const card = recent.locator(`a[href="${deckPath('fr')}"]`)
+    await expect(card).toContainText('Verbes irréguliers')
+    await expect(recent.getByText(pending.name)).toHaveCount(0)
+    await expect(page.getByText('Publier le premier deck')).toHaveCount(0)
+    expect(await accessibilityViolations(page), scheme).toEqual([])
+    await noOverflowAt390(page)
+  }
+  await page.goto('/fr')
+  await page
+    .getByRole('region', { name: 'À découvrir' })
+    .locator(`a[href="${deckPath('fr')}"]`)
+    .click()
+  await expect(page).toHaveURL(new RegExp(`${deckPath('fr')}$`))
+  await page.goto('/en')
+  await expect(
+    page.getByRole('region', { name: 'Worth a look' }).locator(`a[href="${deckPath('en')}"]`),
+  ).toContainText('Irregular verbs')
+})
+
 test('catalogue : recherche sans accents et filtre de langue', async ({ page }) => {
   const t = catalogueMessages.fr.catalogue
   await page.goto('/fr/decks')

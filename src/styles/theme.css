@@ -27,6 +27,9 @@
   --gradient-from: #4f46e5;
   --gradient-to: #db2777;
   --shadow-card: 0 4px 14px #4f46e514;
+  /* The workflow excerpt of the homepage: a dark code block in both themes. */
+  --code: #1b1a2e;
+  --code-foreground: #e0e7ff;
   --art-border: #e4e2f3;
   --art-paper: #ffffff;
   --art-edge: #eef0ff;
@@ -85,6 +88,8 @@
   --gradient-from: #818cf8;
   --gradient-to: #f472b6;
   --shadow-card: 0 0 0 1px #24223a;
+  --code: #0a0914;
+  --code-foreground: #e0e7ff;
   --art-border: #24223a;
   --art-paper: #17162a;
   --art-edge: #1e1b4b;
@@ -107,6 +112,8 @@
 @theme inline {
   --font-serif: var(--font-display);
   --color-brand: var(--brand);
+  --color-code: var(--code);
+  --color-code-foreground: var(--code-foreground);
   --font-heading: var(--font-display);
   --font-sans: var(--font-body);
   --color-sidebar-ring: var(--sidebar-ring);

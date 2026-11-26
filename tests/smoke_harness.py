@@ -60,7 +60,7 @@ class Double:
         self.compose_file = None
         # Every page answers with all expected texts and one build asset.
         self.page = ' '.join([*(page['contains'] for page in pages), 'Le site ouvre très bientôt',
-                              'Titre persistant CI', f'<script src="{ASSET}"></script>']).encode()
+                              'Des decks maintenus comme du code', f'<script src="{ASSET}"></script>']).encode()
         self.real_run = subprocess.run
 
     def run(self, args, check=False, capture_output=False, input=None, **kwargs):

@@ -12,6 +12,13 @@ import { site } from '../src/core/site'
 import { fillEmptyLegalPages, legalPlaceholders } from '../src/site/legal-placeholders'
 import { legalPath } from '../src/core/i18n/legal'
 
+/** The page's text without its tags (a sentence may span several elements). */
+const visible = (html: string) =>
+  html
+    .replace(/<script\b[\s\S]*?<\/script>/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+
 if (!new URL(process.env['DATABASE_URL'] || '').pathname.endsWith('_test'))
   throw new Error('Une base isolée finissant par _test est requise.')
 const origin = process.env['TEST_ORIGIN'] || 'http://localhost:3201'
@@ -67,6 +74,10 @@ try {
     'Page de maintenance pour les visiteurs',
   )
   assert.ok(!visitor.includes('Portrait de test français'), 'Contenu masqué pendant la maintenance')
+  assert.ok(
+    !visible(visitor).includes('Vos decks Anki, toujours à jour.'),
+    'Accueil masqué pendant la maintenance',
+  )
   // The shared header and footer frame it, without the account entry (no session is read).
   assert.equal(visitor.match(/<header/g)?.length, 1, 'En-tête commun sur la page de maintenance')
   assert.equal(
@@ -91,11 +102,14 @@ try {
     await fetch(`${origin}/fr`, { headers: { Cookie: passwordOnly } })
   ).text()
   assert.ok(unverifiedView.includes(messages.fr.maintenanceTitle), 'Maintenance sans code TOTP')
-  assert.ok(!unverifiedView.includes('Portrait de test français'))
+  assert.ok(!visible(unverifiedView).includes('Vos decks Anki, toujours à jour.'))
   const session = await totpLogin(origin, account.email, password)
   const adminCookie = session.cookie
   const adminView = await (await fetch(`${origin}/fr`, { headers: { Cookie: adminCookie } })).text()
-  assert.ok(adminView.includes('Portrait de test français'), 'Site réel pour un administrateur')
+  assert.ok(
+    visible(adminView).includes('Vos decks Anki, toujours à jour.'),
+    'Site réel pour un administrateur',
+  )
   assert.ok(adminView.includes('Mode maintenance'), 'Bandeau de rappel pour l’administrateur')
   assert.equal(adminView.match(/<header/g)?.length, 1, 'En-tête commun pour l’administrateur')
   // An administrator is not a visitor: the header offers the visitor sign-in.
@@ -133,13 +147,54 @@ try {
     assert.equal(response.status, 200)
     return response.text()
   }
-  let fr = await read('fr')
+  const fr = await read('fr')
   assert.match(fr, /<html lang="fr"/)
-  assert.match(fr, /Portrait de test français/)
-  let en = await read('en')
+  const en = await read('en')
   assert.match(en, /<html lang="en"/)
-  assert.match(en, /Portrait de test français/)
-  assert.ok(en.includes(messages.en.discover))
+  // The DeckDock homepage, written in code: the global site-content is no longer read there.
+  {
+    const text = visible(fr)
+    for (const expected of [
+      'Gratuit et open source',
+      'Vos decks Anki, toujours à jour.',
+      'Parcourir les decks',
+      'Comment ça marche',
+      'Trouvez un deck',
+      'Collez son adresse',
+      'Recevez les mises à jour',
+      'Decks récents',
+      'Pour les auteurs',
+      'Votre deck vit dans un dépôt GitHub',
+      'NayanChauveau/deckdock/action@v0',
+      'Le template',
+    ])
+      assert.ok(text.includes(expected), `/fr : ${expected}`)
+    assert.ok(!text.includes('Portrait de test français'), 'site-content plus lu par l’accueil')
+    assert.ok(!text.includes('cartes'), 'l’accueil dit « notes »')
+    // No approved deck in this database: the section invites to publish the first one.
+    assert.ok(text.includes('Publier le premier deck'), 'invitation à publier')
+    assert.ok(fr.includes('href="/fr/decks"'), 'Parcourir les decks')
+    assert.ok(fr.includes('href="/fr/guide/publier-avec-github"'), 'Publier un deck')
+    assert.ok(fr.includes('href="https://github.com/NayanChauveau/deckdock-template"'))
+    const english = visible(en)
+    for (const expected of [
+      'Free and open source',
+      'Your Anki decks, always up to date.',
+      'Browse decks',
+      'How it works',
+      'Find a deck',
+      'Paste its address',
+      'Get the updates',
+      'Recent decks',
+      'For authors',
+      'Your deck lives in a GitHub repository',
+      'NayanChauveau/deckdock/action@v0',
+      'Publish the first deck',
+    ])
+      assert.ok(english.includes(expected), `/en : ${expected}`)
+    assert.ok(!english.includes('Portrait de test français'))
+    assert.ok(en.includes('href="/en/guide/publish-with-github"'))
+  }
 
   const buffer = await sharp({
     create: { width: 400, height: 500, channels: 3, background: '#ccc6b5' },
@@ -174,12 +229,7 @@ try {
     locale: 'fr',
     data: { title: 'Titre français actualisé', heroImage: image.id },
   })
-  fr = await read('fr')
-  en = await read('en')
-  assert.match(fr, /Titre français actualisé/, 'Modification visible sans rebuild')
-  assert.match(en, /English test portrait/)
-  assert.match(en, /Image française de test/, 'Le texte alternatif utilise aussi le fallback FR')
-  assert.ok(fr.includes(`/api/media/file/${image.filename}`))
+  assert.ok(!visible(await read('fr')).includes('Titre français actualisé'))
   assert.equal((await fetch(`${origin}/api/media/file/${image.filename}`)).status, 200)
   assert.equal((await readPublicSite(payload, 'en')).content.seoTitle, 'SEO français')
   const sharing = await payload.create({
@@ -199,12 +249,10 @@ try {
     assert.equal(response.status, 200)
     return response.text()
   }
-  const imageTag = (url: string) => `property="og:image" content="${url}"`
-  const publicImage = `${origin}/api/media/file/${image.filename}`
-  const sharingImage = `${origin}/api/media/file/${sharing.filename}`
   const fallback = await readMetadata('/en')
   assert.ok(fallback.includes('rel="icon" href="/site-icon.svg"'))
-  assert.ok(fallback.includes(imageTag(publicImage)), 'Sharing falls back to the main image')
+  assert.match(fallback, /<title>DeckDock · Your Anki decks, always up to date\.<\/title>/)
+  assert.ok(fallback.includes('property="og:site_name" content="DeckDock"'))
   assert.equal((await fetch(origin + '/site-icon.svg')).status, 200)
   await payload.updateGlobal({
     ...options,
@@ -218,8 +266,11 @@ try {
     data: { favicon: sharing.id },
   })
   const homePreview = await readMetadata('/fr')
-  assert.ok(homePreview.includes(imageTag(sharingImage)))
-  assert.match(homePreview, /<title>SEO français \| Atelier de test<\/title>/)
+  // The homepage's metadata is in the code, under the name DeckDock (not site-settings' name).
+  assert.match(homePreview, /<title>DeckDock · Vos decks Anki, toujours à jour\.<\/title>/)
+  assert.ok(homePreview.includes('Des decks maintenus comme du code'), 'description')
+  assert.ok(!homePreview.includes('Atelier de test'))
+  assert.ok(!homePreview.includes('SEO français'))
   assert.ok(homePreview.includes(`rel="icon" href="/api/media/file/${sharing.filename}"`))
   assert.ok(homePreview.includes(`rel="canonical" href="${origin}/fr"`))
   assert.equal((await fetch(`${origin}/de`)).status, 404)

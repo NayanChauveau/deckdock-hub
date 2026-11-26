@@ -66,6 +66,13 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   module `accounts` (`SignInPage`, `DeletedPage`, `AccountView`) rendent un `<div>`, le `<main>`
   étant celui du cadre ; `src/styles/site.css` (en-tête, menus, pied). Le contrat
   `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête).
+- **Accueil** (`src/app/(frontend)/[locale]/page.tsx`) : réécrite pour DeckDock (textes dans
+  `src/site/home-content.ts`, blocs dans `src/site/HomePage.tsx`), elle montre les decks récents
+  (`src/modules/decks/ui/RecentDecks.tsx`) : elle appartient donc au module `decks` (`routes` du
+  manifeste, pièce `decks` de `starter.json`, qui la retire de `perSite` ;
+  `tests/starter-coverage.test.ts` suit). Le global `site-content` n’est plus lu par l’accueil
+  (la collection reste). `deploy/smoke_site.py` cherche une phrase de l’accueil sur `/fr` une fois
+  le site ouvert ; `src/styles/theme.css` gagne `--code` et `--code-foreground` (extrait du workflow).
 - **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
 - **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
   `'none'` dans l’administration.

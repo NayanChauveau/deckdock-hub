@@ -46,7 +46,9 @@ export function DeckCard({
               {language}
             </span>
           ))}
-          {meta ? <span className="text-xs text-muted-foreground">{meta}</span> : null}
+          {meta ? (
+            <span className="min-w-0 break-words text-xs text-muted-foreground">{meta}</span>
+          ) : null}
         </span>
       ) : null}
     </Link>

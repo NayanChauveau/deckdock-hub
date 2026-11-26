@@ -69,6 +69,8 @@ try {
   {
     const page = await get('/fr/decks')
     assert.ok(!page.text.includes('Verbes irréguliers'), 'catalogue hidden during maintenance')
+    const home = await get('/fr')
+    assert.ok(!home.text.includes('Verbes irréguliers'), 'no deck on the home during maintenance')
   }
   await payload.updateGlobal({ slug: 'site-settings', data: { maintenance: false } })
 
@@ -114,6 +116,27 @@ try {
     // Odd parameters are ignored, never an error.
     for (const query of ['?page=-1', '?page=99999', '?lang=%22%3E', '?q=%25_%5C', '?q=a&q=b'])
       assert.equal((await get(`/fr/decks${query}`)).status, 200, query)
+  }
+
+  // The homepage's « Decks récents »: approved decks only, each card leading to its page, in the
+  // visitor's language; no invitation to publish the first deck once one is approved.
+  {
+    const home = await get('/fr')
+    assert.equal(home.status, 200)
+    assert.ok(home.text.includes('Decks récents'))
+    assert.ok(home.text.includes('Verbes irréguliers'), 'approved deck on the home')
+    assert.ok(home.text.includes('href="/fr/d/ivan/verbes"'), 'card leads to the deck page')
+    assert.ok(home.text.includes('href="/fr/decks"'), 'Tout le catalogue')
+    assert.ok(!home.text.includes('Deck confidentiel'), 'pending deck not on the home')
+    assert.ok(!home.text.includes('Deck masqué'), 'hidden deck not on the home')
+    assert.ok(!home.text.includes('Publier le premier deck'), 'no invitation once a deck exists')
+    // The description as plain text: no Markdown marks, the author's HTML never rendered.
+    assert.ok(!home.text.includes('**irréguliers**'))
+    assert.ok(!home.text.includes('<b>pas du HTML</b>'))
+    const en = await get('/en')
+    assert.ok(en.text.includes('Recent decks'))
+    assert.ok(en.text.includes('Irregular verbs'), 'English edition on the English home')
+    assert.ok(en.text.includes('href="/en/d/ivan/verbes"'))
   }
 
   // The deck page.

@@ -19,6 +19,8 @@ import uuid
 PAYLOAD_RUN = ['node', '--import', 'tsx', 'node_modules/payload/bin.js', '--disable-transpile', 'run']
 SUMMARY = 'Images web et ops vérifiées : UID non root, runtime minimal, vérificateur deckdock (Python sans pip, volume hub-files), migrations, bootstrap idempotent, purge, email de test, cookies Secure, double authentification, upload, sauvegardes, persistance après recréation et réinitialisation administrateur.'
 HUB_DATA_DIR = '/data/hub'
+# A sentence of the homepage (src/site/home-content.ts): shown on /fr once the site is open.
+HOME_TEXT = 'Des decks maintenus comme du code'
 # deckdock/1 example (deckdock spec/examples/valid/minimal.json): one edition, one note.
 DECK = {
     'format': 'deckdock/1',
@@ -151,7 +153,9 @@ def after_pages(stack):
     media = json.loads(request('/api/media', body, 'multipart/form-data; boundary=' + boundary, session)[0])['doc']
     request('/api/globals/site-settings', json.dumps({'siteName': 'Smoke', 'maintenance': False}).encode(), session=session)
     request('/api/globals/site-content?locale=fr', json.dumps({'title': 'Titre persistant CI', 'description': 'Contenu persistant', 'seoImage': media['id']}).encode(), session=session)
-    assert b'Titre persistant CI' in request('/fr')[0]
+    # The homepage is written in code (the global site-content is no longer shown on it): the site
+    # opened by the setting above shows it.
+    assert HOME_TEXT.encode() in request('/fr')[0]
     assert request('/api/media/file/' + media['filename'])[0] == png
     stack.state.update(png=png, media=media)
 
@@ -159,7 +163,8 @@ def after_pages(stack):
 def after_recreate(stack):
     # The hub-files volume keeps the decks.
     stack.compose('exec', '-T', 'web', 'test', '-s', f'{HUB_DATA_DIR}/smoke-valid/en/deck.json')
-    assert b'Titre persistant CI' in stack.request('/fr')[0]
+    # The edited settings survive: the site is still open, its homepage shown.
+    assert HOME_TEXT.encode() in stack.request('/fr')[0]
     assert stack.request('/api/media/file/' + stack.state['media']['filename'])[0] == stack.state['png']
 
 

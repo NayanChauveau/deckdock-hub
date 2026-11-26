@@ -9,8 +9,8 @@ import type { Viewer } from '@/site/viewer'
 
 // No server-only import here: the error page, a client component, renders this frame too.
 
-/** The site's name, as the header and footer show it. */
-const NAME = 'DeckDock'
+/** The site's name, as the header, the footer and the homepage's metadata show it. */
+export const SITE_NAME = 'DeckDock'
 
 /** Where the header and footer lead, in `locale` (account pages: the accounts and decks modules). */
 export function siteLinks(locale: Locale) {
@@ -98,7 +98,7 @@ export function SiteHeader({ locale, paths, viewer, navigate }: HeaderProps) {
           <span className="wordmark-dot" aria-hidden="true">
             ●
           </span>
-          {NAME}
+          {SITE_NAME}
         </Link>
         <nav aria-label={t.navigation} className="main-nav">
           {navigation}
@@ -164,7 +164,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
           <span className="wordmark-dot" aria-hidden="true">
             ●
           </span>{' '}
-          {NAME} · {t.openSource}
+          {SITE_NAME} · {t.openSource}
         </p>
         <nav aria-label={t.footerNavigation} className="footer-links">
           <a href={`${GITHUB}/deckdock`}>{t.githubAddon}</a>

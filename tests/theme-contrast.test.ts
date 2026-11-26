@@ -59,9 +59,21 @@ const textPairs = [
   ['brand', 'background'],
   ['brand', 'card'],
   ['art-signature', 'art-paper'],
+  // The homepage: its badge and step numbers, its lead on the hero's tinted top, the code excerpt.
+  ['brand', 'accent'],
+  ['muted-foreground', 'secondary'],
+  ['code-foreground', 'code'],
   // The initial of a deck without an icon: white on each of the 8 stable colours.
   ...Array.from({ length: 8 }, (_, i) => ['initial-foreground', `initial-${i + 1}`]),
 ]
+/** Large text (WCAG 1.4.3, 3:1): both ends of the homepage title's gradient, on the hero's tinted
+ *  top and on the page. */
+const largeTextPairs = [
+  ['gradient-from', 'secondary'],
+  ['gradient-to', 'secondary'],
+  ['gradient-from', 'background'],
+  ['gradient-to', 'background'],
+] as const
 /** Non-text contrast (WCAG 1.4.11): the focus ring, field borders and strong borders need 3:1
  *  against the page in both themes. */
 const nonTextPairs = [
@@ -122,6 +134,10 @@ void test('AA contrast in the light and the dark theme', () => {
     for (const [front = '', back = ''] of textPairs) {
       const ratio = contrast(tokens, front, back)
       assert.ok(ratio >= 4.5, `${name}: ${front} on ${back} is ${ratio.toFixed(2)}:1, below 4.5:1`)
+    }
+    for (const [front, back] of largeTextPairs) {
+      const ratio = contrast(tokens, front, back)
+      assert.ok(ratio >= 3, `${name}: ${front} on ${back} is ${ratio.toFixed(2)}:1, below 3:1`)
     }
     for (const [front, back] of nonTextPairs) {
       const ratio = contrast(tokens, front, back)
