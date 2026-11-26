@@ -248,6 +248,32 @@ test('un administrateur aussi connecté comme visiteur : son menu, puis son espa
   await page.getByRole('main').getByRole('link', { name: mine }).click()
   await expect(page).toHaveURL(/\/fr\/compte\/decks$/)
   await expect(page.getByRole('heading', { level: 1, name: mine })).toBeVisible()
+  // Their pending deck: the page and each preview frame are read as the visitor author, though
+  // every request also carries the administrator's cookie.
+  const t = deckMessages.fr
+  const handle = `admin-${suffix()}`
+  await page.goto('/fr/compte/decks')
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('textbox', { name: t.space.handleLabel }).fill(handle)
+  await page.getByRole('button', { name: t.space.handleSubmit }).click()
+  await expect(page.getByRole('main').getByText(handle, { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: t.space.deckIdLabel }).fill('verbs')
+  await page.getByRole('button', { name: t.space.newSubmit }).click()
+  const token = await page.getByRole('textbox', { name: t.token.label }).inputValue()
+  const published = await page.request.post('/api/publish/en', {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/gzip' },
+    data: await editionArchive(
+      deckJson({ id: 'verbs', edition: 'en', version: '2026-11-26-adm', media: false }),
+    ),
+  })
+  expect(published.status(), await published.text()).toBe(200)
+  const deckPage = await page.goto(`/fr/d/${handle}/verbs`)
+  expect(deckPage?.status()).toBe(200)
+  await page.locator('iframe[src$="/en/0/front"]').scrollIntoViewIfNeeded()
+  await expect(page.frameLocator('iframe[src$="/en/0/front"]').locator('body')).toContainText(
+    'Front',
+  )
+
   // The administration still sees an administrator.
   await page.goto('/admin')
   await expect(page).not.toHaveURL(/\/admin\/login/)

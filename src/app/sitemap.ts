@@ -11,7 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const absolute = (path: string) => new URL(path, siteURL()).toString()
   const pages: Record<'fr' | 'en', string>[] = [
     { fr: '/fr', en: '/en' },
-    { fr: '/fr/commande', en: '/en/commande' },
+    { fr: '/fr/decks', en: '/en/decks' },
     ...legalPageKeys.map((key) => ({ fr: legalPath('fr', key), en: legalPath('en', key) })),
     // The author guide (src/site/guide): its home and each page.
     { fr: guidePath('fr'), en: guidePath('en') },

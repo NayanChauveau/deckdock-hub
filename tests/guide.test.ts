@@ -187,6 +187,28 @@ void test('« Le format en détail » covers icon, homepage, editions, media and
   }
 })
 
+void test('the sitemap lists the catalogue, and no route the hub does not have', async () => {
+  const previous = process.env['PUBLIC_INDEXING']
+  process.env['PUBLIC_INDEXING'] = 'true'
+  try {
+    const { default: sitemap } = await import('../src/app/sitemap')
+    const entries = sitemap()
+    const urls = entries.map((entry) => new URL(entry.url).pathname)
+    for (const locale of locales)
+      assert.ok(urls.includes(`/${locale}/decks`), `${locale}: catalogue`)
+    assert.ok(!urls.some((path) => path.endsWith('/commande')), 'no /commande')
+    const catalogue = entries.find((entry) => new URL(entry.url).pathname === '/en/decks')
+    assert.deepEqual(Object.keys(catalogue?.alternates?.languages ?? {}).sort(), [
+      'en',
+      'fr',
+      'x-default',
+    ])
+  } finally {
+    if (previous === undefined) delete process.env['PUBLIC_INDEXING']
+    else process.env['PUBLIC_INDEXING'] = previous
+  }
+})
+
 void test('the sitemap lists the guide, its home and every page in both languages', async () => {
   const previous = process.env['PUBLIC_INDEXING']
   process.env['PUBLIC_INDEXING'] = 'true'
