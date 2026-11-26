@@ -50,7 +50,7 @@ export function AuthorDeckView({
   const received = editions.some((edition) => edition.versions.length > 0)
   const guideLink = (
     <p className="text-sm">
-      <Link href={publishGuidePath(locale)} prefetch={false} className={inlineLink}>
+      <Link href={publishGuidePath(locale)} className={inlineLink}>
         {t.guideLink}
       </Link>
     </p>

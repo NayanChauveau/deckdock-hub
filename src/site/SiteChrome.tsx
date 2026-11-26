@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { guidePath, publishGuidePath } from '@/core/i18n/guide'
 import type { Locale } from '@/core/i18n/locales'
 import { legalLabels, legalPath } from '@/core/i18n/legal'
 import { ThemeToggle } from '@/core/ui/theme/ThemeToggle'
@@ -17,8 +18,8 @@ export function siteLinks(locale: Locale) {
   return {
     home: `/${locale}`,
     catalogue: `/${locale}/decks`,
-    publish: locale === 'fr' ? '/fr/guide/publier-avec-github' : '/en/guide/publish-with-github',
-    guide: `/${locale}/guide`,
+    publish: publishGuidePath(locale),
+    guide: guidePath(locale),
     signIn: `/${locale}/compte/connexion`,
     account: `/${locale}/compte`,
     myDecks: `/${locale}/compte/decks`,
@@ -29,10 +30,6 @@ export function siteLinks(locale: Locale) {
 export const homePaths: Record<Locale, string> = { fr: '/fr', en: '/en' }
 
 const GITHUB = 'https://github.com/NayanChauveau'
-
-// Not prefetched: in the production build, the router's prefetch of an address that answers 404
-// (the guide, until its pages exist) never completes, and the page never reaches network idle.
-const NO_PREFETCH = false
 
 interface HeaderProps {
   locale: Locale
@@ -62,10 +59,10 @@ export function SiteHeader({ locale, paths, viewer, navigate }: HeaderProps) {
       <Link href={links.catalogue} aria-current={current(links.catalogue)}>
         {t.catalogue}
       </Link>
-      <Link href={links.publish} prefetch={NO_PREFETCH} aria-current={current(links.publish)}>
+      <Link href={links.publish} aria-current={current(links.publish)}>
         {t.publish}
       </Link>
-      <Link href={links.guide} prefetch={NO_PREFETCH} aria-current={current(links.guide, true)}>
+      <Link href={links.guide} aria-current={current(links.guide, true)}>
         {t.guide}
       </Link>
     </>
@@ -169,9 +166,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         <nav aria-label={t.footerNavigation} className="footer-links">
           <a href={`${GITHUB}/deckdock`}>{t.githubAddon}</a>
           <a href={`${GITHUB}/deckdock-hub`}>{t.githubHub}</a>
-          <Link href={siteLinks(locale).guide} prefetch={NO_PREFETCH}>
-            {t.guide}
-          </Link>
+          <Link href={siteLinks(locale).guide}>{t.guide}</Link>
           <Link href={legalPath(locale, 'legalNotice')}>{legalLabels[locale].legalNotice}</Link>
           <Link href={legalPath(locale, 'privacy')}>{legalLabels[locale].privacy}</Link>
         </nav>

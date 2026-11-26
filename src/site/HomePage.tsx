@@ -4,9 +4,6 @@ import type { Locale } from '@/core/i18n/locales'
 import { homeContent, TEMPLATE_URL, WORKFLOW_EXCERPT } from '@/site/home-content'
 import { siteLinks } from '@/site/SiteChrome'
 
-// Not prefetched, like the header: the guide's pages do not exist yet (SiteChrome.tsx).
-const NO_PREFETCH = false
-
 const pill =
   'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-5 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 const primary = `${pill} bg-primary text-primary-foreground shadow-[var(--shadow-card)] hover:brightness-110`
@@ -44,7 +41,7 @@ export function HomePage({ locale, recent }: { locale: Locale; recent: ReactNode
             <Link className={primary} href={links.catalogue}>
               {t.browse}
             </Link>
-            <Link className={ghost} href={links.publish} prefetch={NO_PREFETCH}>
+            <Link className={ghost} href={links.publish}>
               {t.publish}
               <span aria-hidden="true">→</span>
             </Link>
@@ -101,7 +98,7 @@ export function HomePage({ locale, recent }: { locale: Locale; recent: ReactNode
             </h2>
             <p className="mt-4 text-muted-foreground">{t.authors.text}</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link className={primary} href={links.publish} prefetch={NO_PREFETCH}>
+              <Link className={primary} href={links.publish}>
                 {t.authors.publish}
               </Link>
               <a className={ghost} href={TEMPLATE_URL}>
@@ -129,7 +126,7 @@ export function RecentDecksEmpty({ locale }: { locale: Locale }) {
     <div className="flex flex-col items-center gap-3 rounded-[var(--radius)] border border-dashed border-border bg-card px-6 py-10 text-center">
       <h3 className="text-lg font-semibold">{t.emptyTitle}</h3>
       <p className="max-w-md text-sm text-muted-foreground">{t.emptyText}</p>
-      <Link className={`${primary} mt-2`} href={siteLinks(locale).publish} prefetch={NO_PREFETCH}>
+      <Link className={`${primary} mt-2`} href={siteLinks(locale).publish}>
         {t.emptyAction}
       </Link>
     </div>

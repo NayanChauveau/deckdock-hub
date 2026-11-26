@@ -42,6 +42,9 @@ en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés
   l’utilisateur 1001 (un nouveau volume prend son propriétaire). En test, `HUB_DATA_DIR` désigne un
   dossier temporaire.
 
+L’image `production` contient aussi `content/` (les pages du guide des auteurs, lues par le
+serveur à l’exécution).
+
 Le smoke des images (`python3 deploy/smoke.py`, extension `deploy/smoke_site.py`) le vérifie sur
 l’image construite : version de `deckdock`, modules importés par la bibliothèque (sha256 compris),
 extensions retirées bien absentes, absence de pip, vérification d’un deck valide et d’un
@@ -93,6 +96,12 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   `tests/theme-contrast.test.ts` en vérifie les valeurs et les contrastes (AA, 3:1 pour bordures et focus),
   dont les pastilles de statut (`brand` sur `secondary`, `destructive` sur `muted`).
 - **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
+- **Guide des auteurs** (`/fr/guide`, `/en/guide`) : pages Markdown dans `content/guide/{fr,en}/`,
+  rendues sur le serveur par `src/site/guide` (markdown-it, HTML brut désactivé) et la route
+  `src/app/(frontend)/[locale]/guide/[[...slug]]/page.tsx`. Fichiers du starter touchés :
+  le nouveau `src/core/i18n/guide.ts` (adresses et ordre des pages, partagés par `SiteChrome.tsx` et
+  le module `decks`), `src/app/sitemap.ts` (pages du guide), `Dockerfile` (`content/` copié dans
+  l’image `production`, lu à l’exécution).
 - **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
 - **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios
   `decks` et `decks_http`.

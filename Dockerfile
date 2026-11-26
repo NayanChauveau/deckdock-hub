@@ -24,6 +24,8 @@ FROM dependencies AS builder
 COPY src ./src
 COPY public ./public
 COPY next.config.mjs tsconfig.json postcss.config.mjs site.config.json ./
+# DeckDock hub: the author guide's Markdown pages, read by the server at run time (src/site/guide).
+COPY content ./content
 ENV NEXT_TELEMETRY_DISABLED=1 NEXT_OUTPUT=standalone
 # Deliberately unreachable database and dummy values: no production secret at build time.
 RUN PAYLOAD_SECRET=build-only-placeholder-not-a-runtime-secret-000000 \
@@ -78,6 +80,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/content ./content
 # The deckdock checker (README, « Écarts avec l’image du starter »): the interpreter and its standard
 # library from the python stage, the library in /opt/deckdock. Both belong to root.
 COPY --from=python /usr/local/bin/python3.13 /usr/local/bin/python3.13

@@ -13,8 +13,7 @@ const itemOff = `${item} text-muted-foreground hover:bg-muted hover:text-foregro
 
 /**
  * The author space's frame (spec 2026-11-26-refonte-ux, « Espace auteur »): a sidebar (Mes decks,
- * Compte, Guide auteur) beside the page; under 768 px, the same links as tabs above it. The guide
- * is not prefetched until its pages exist (as in the site's header).
+ * Compte, Guide auteur) beside the page; under 768 px, the same links as tabs above it.
  */
 export function AuthorShell({
   locale,
@@ -39,7 +38,6 @@ export function AuthorShell({
             <li key={key}>
               <Link
                 href={href}
-                {...(key === 'guide' ? { prefetch: false } : {})}
                 aria-current={key === current ? 'page' : undefined}
                 className={key === current ? itemOn : itemOff}
               >
