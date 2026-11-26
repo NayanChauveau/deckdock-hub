@@ -17,13 +17,6 @@ export function languageName(locale: Locale, code: string): string {
   }
 }
 
-/** A day, as the reader reads it (Paris time). */
-export const formatDay = (locale: Locale, date: Date): string =>
-  new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', {
-    dateStyle: 'long',
-    timeZone: 'Europe/Paris',
-  }).format(date)
-
 /** A language's own name, capitalised as it starts a label (`fr` → "Français"), or its code. */
 export function languageAutonym(code: string): string {
   try {

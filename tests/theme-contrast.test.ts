@@ -164,12 +164,15 @@ function files(path: string): string[] {
 }
 
 /**
- * Fixed colours that are meant to stay the same in both themes. The card preview iframe (DeckPage)
+ * Fixed colours that are meant to stay the same in both themes. The card preview iframe (PreviewCarousel)
  * frames a sandboxed card document whose own CSS comes from the deck and assumes a white page: its
  * background must not follow the site theme.
  */
 const allowed = [
-  { file: 'src/modules/decks/ui/DeckPage.tsx', text: 'rounded-lg border border-border bg-white' },
+  {
+    file: 'src/modules/decks/ui/PreviewCarousel.tsx',
+    text: 'className="h-56 w-full rounded-lg bg-white"',
+  },
 ]
 
 void test('no literal colour in public styles and components outside theme.css', () => {

@@ -79,7 +79,7 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
 - **`next.config.mjs`** : la CSP de base saute `/preview/`, et `/d/` reçoit la CSP des fichiers
   servis.
 - **`src/app/robots.ts`** : `/d/` et `/preview/` exclus.
-- **`tests/theme-contrast.test.ts`** : l’aperçu des notes (`bg-white` du cadre dans `DeckPage.tsx`)
+- **`tests/theme-contrast.test.ts`** : l’aperçu des notes (`bg-white` du cadre dans `PreviewCarousel.tsx`)
   est exclu de la recherche de couleurs écrites en dur : le document d’une note suppose une page blanche.
 - **`src/styles/theme.css`** : palette DeckDock (clair et sombre), polices système, rayon, ombre de carte ;
   `tests/theme-contrast.test.ts` en vérifie les valeurs et les contrastes (AA, 3:1 pour bordures et focus).

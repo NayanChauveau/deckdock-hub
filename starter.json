@@ -134,6 +134,7 @@
         "tests/decks.catalogue.ui.test.tsx",
         "tests/decks.http.ts",
         "tests/decks.integration.ts",
+        "tests/decks.page.ui.test.tsx",
         "tests/decks.preview.test.ts",
         "tests/decks.publish.test.ts",
         "tests/decks.review.test.ts",

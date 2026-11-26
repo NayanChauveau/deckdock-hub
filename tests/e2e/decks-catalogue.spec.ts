@@ -160,7 +160,7 @@ test('catalogue à 390 px : nom, description et pseudo très longs ne débordent
   }
 })
 
-test('page de deck en français : éditions, adresse à copier, aperçu isolé', async ({
+test('page de deck en français : suivre dans Anki, aperçu en carrousel isolé, en bref', async ({
   page,
   context,
 }) => {
@@ -169,50 +169,128 @@ test('page de deck en français : éditions, adresse à copier, aperçu isolé',
   await page.goto('/fr/decks')
   await page.getByRole('link', { name: 'Verbes irréguliers' }).click()
   await expect(page).toHaveURL(new RegExp(`${deckPath('fr')}$`))
-  await expect(page.getByRole('heading', { level: 1, name: 'Verbes irréguliers' })).toBeVisible()
-  await expect(page.getByText('CC-BY-4.0')).toBeVisible()
+  const heading = page.getByRole('heading', { level: 1, name: 'Verbes irréguliers' })
+  await expect(heading).toBeVisible()
+  const header = page.locator('header', { has: heading })
+  await expect(header).toContainText(`${t.by} ${approved.handle}`)
+  await expect(header).toContainText('CC-BY-4.0')
+  await expect(header).toContainText(/mis à jour (il y a|à l’instant)/)
   // The shared header and footer; FR · EN lead to this deck in the other language.
   const banner = page.getByRole('banner')
   await expect(page.getByRole('contentinfo')).toBeVisible()
   await expect(banner.getByRole('link', { name: /^EN/ })).toHaveAttribute('href', deckPath('en'))
   await expect(banner.getByRole('link', { name: /^FR/ })).toHaveAttribute('href', deckPath('fr'))
+
+  // « Suivre ce deck dans Anki »: a tab per edition, the shown edition's address, Copy.
+  const follow = page.getByRole('region', { name: t.followTitle })
+  const tabs = follow.getByRole('navigation', { name: t.editionsTitle })
+  await expect(tabs.getByRole('link', { name: 'Français' })).toHaveAttribute('aria-current', 'page')
   const origin = new URL(page.url()).origin
   const address = `${origin}/d/${approved.handle}/${approved.deckId}/fr/`
   await expect(page.getByTestId('address-fr')).toHaveText(address)
-  await page.getByRole('button', { name: t.copy('fr') }).click()
-  await expect(page.getByText(t.copied)).toBeVisible()
+  await follow.getByRole('button', { name: t.copy }).click()
+  await expect(follow.getByText(t.copied)).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(address)
+  await expect(follow.getByRole('link', { name: new RegExp(t.installAddon) })).toHaveAttribute(
+    'href',
+    'https://github.com/NayanChauveau/anki-deck-manager',
+  )
+  // « En bref »: notes, languages, licence and the https homepage as « Source ».
+  const facts = page.getByRole('region', { name: t.facts })
+  await expect(facts).toContainText('CC-BY-4.0')
+  await expect(facts.getByRole('link', { name: /example\.test/ })).toHaveAttribute(
+    'href',
+    'https://example.test/verbes',
+  )
   // Safe Markdown: bold rendered, the author's HTML shown as text.
   await expect(page.locator('strong', { hasText: 'irréguliers' })).toBeVisible()
   await expect(page.getByText('<b>pas du HTML</b>', { exact: false })).toBeVisible()
 
-  const frames = page.locator('iframe')
-  await expect(frames).toHaveCount(4)
+  // The carousel: one note at a time, front and back side by side, in sandboxed frames that
+  // really draw the card and its image (Chromium).
+  const preview = page.getByRole('region', { name: t.previewTitle })
+  const frames = preview.locator('iframe')
+  await expect(frames).toHaveCount(2)
   for (const frame of await frames.all())
     await expect(frame).toHaveAttribute('sandbox', 'allow-scripts')
   await loadPreviews(page)
   const front = page.frameLocator('iframe[src$="/fr/0/front"]')
   await expect(front.locator('img')).toBeVisible()
+  expect(
+    await front.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth),
+  ).toBeGreaterThan(0)
+  await expect(front.locator('.q')).toContainText('go')
+  const [frontBox, backBox] = [await frames.nth(0).boundingBox(), await frames.nth(1).boundingBox()]
+  expect(frontBox && backBox && Math.abs(frontBox.y - backBox.y) < 1, 'side by side').toBe(true)
+  await expect(preview.getByRole('status')).toHaveText('Note 1 sur 2')
+  await preview.getByRole('button', { name: t.nextNote }).click()
+  await expect(preview.getByRole('status')).toHaveText('Note 2 sur 2')
+  await loadPreviews(page)
   await expect(page.frameLocator('iframe[src$="/fr/1/back"]').locator('.cloze')).toHaveText('parti')
   await expect(page.frameLocator('iframe[src$="/fr/1/front"]').locator('.cloze')).toHaveText(
     '[...]',
   )
-  expect(await accessibilityViolations(page)).toEqual([])
-  await noOverflowAt390(page)
+  // Keyboard: the buttons are reachable and work with Enter.
+  await preview.getByRole('button', { name: t.previousNote }).focus()
+  await page.keyboard.press('Enter')
+  await expect(preview.getByRole('status')).toHaveText('Note 1 sur 2')
+
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    expect(await accessibilityViolations(page), scheme).toEqual([])
+    await noOverflowAt390(page)
+  }
+  // On a phone the follow block comes right under the deck's header, before the preview.
+  await page.setViewportSize({ width: 390, height: 844 })
+  const [headerBox, followBox, previewBox] = await Promise.all([
+    header.boundingBox(),
+    follow.boundingBox(),
+    preview.boundingBox(),
+  ])
+  expect(headerBox && followBox && previewBox).toBeTruthy()
+  if (headerBox && followBox && previewBox) {
+    expect(followBox.y).toBeGreaterThan(headerBox.y)
+    expect(previewBox.y).toBeGreaterThan(followBox.y)
+  }
 })
 
 test('deck page in English: the English edition by default', async ({ page }) => {
   const t = catalogueMessages.en.deck
   await page.goto(deckPath('en'))
   await expect(page.getByRole('heading', { level: 1, name: 'Irregular verbs' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 2, name: t.editionsTitle })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: t.followTitle })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: t.historyTitle })).toBeVisible()
+  await expect(page.getByTestId('address-en')).toHaveText(/\/d\/olivia\/verbes\/en\/$/)
   await loadPreviews(page)
   expect(await accessibilityViolations(page)).toEqual([])
   await noOverflowAt390(page)
   // The French edition on request.
-  await page.getByRole('link', { name: t.show('fr') }).click()
+  await page
+    .getByRole('navigation', { name: t.editionsTitle })
+    .getByRole('link', { name: 'Français' })
+    .click()
   await expect(page.getByRole('heading', { level: 1, name: 'Verbes irréguliers' })).toBeVisible()
+  await expect(page.getByTestId('address-fr')).toBeVisible()
+})
+
+test('page de deck à 390 px : textes très longs, deck sans édition dans la langue du visiteur', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    // The long deck has a French edition only: an English visitor sees it, with no gap.
+    for (const locale of ['fr', 'en'] as const) {
+      await page.goto(`/${locale}/d/${long.handle}/${long.deckId}`)
+      await expect(page.getByRole('heading', { level: 1, name: long.name })).toBeVisible()
+      await expect(page.getByTestId('address-fr')).toBeVisible()
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `${locale} ${scheme}`).toBeLessThanOrEqual(0)
+      expect(await accessibilityViolations(page), `${locale} ${scheme}`).toEqual([])
+    }
+  }
 })
 
 test('un deck en attente n’existe pas pour les visiteurs', async ({ page }) => {

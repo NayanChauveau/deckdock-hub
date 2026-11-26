@@ -4,10 +4,13 @@ import type { ReactNode } from 'react'
 export function Section({
   title,
   id,
+  className = '',
   children,
 }: {
   title: string
   id?: string
+  /** Extra classes for the card (a highlighted border…). */
+  className?: string
   children: ReactNode
 }) {
   const headingId = id ? `${id}-title` : undefined
@@ -15,7 +18,7 @@ export function Section({
     <section
       id={id}
       aria-labelledby={headingId}
-      className="rounded-[var(--radius)] bg-card p-5 text-card-foreground shadow-[var(--shadow-card)]"
+      className={`min-w-0 rounded-[var(--radius)] bg-card p-5 text-card-foreground shadow-[var(--shadow-card)] ${className}`}
     >
       <h2 id={headingId} className="mb-3 text-base font-semibold">
         {title}

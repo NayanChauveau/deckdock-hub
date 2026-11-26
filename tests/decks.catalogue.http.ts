@@ -244,19 +244,38 @@ try {
     const html = page.text
     assert.ok(html.includes('Verbes irréguliers'))
     assert.ok(html.includes('CC-BY-4.0'))
-    assert.ok(html.includes(`${origin}/d/ivan/verbes/fr/`), 'fr address')
-    assert.ok(html.includes(`${origin}/d/ivan/verbes/en/`), 'en address')
+    // « Suivre ce deck dans Anki »: a tab (a plain link) per edition, the shown edition's address
+    // to copy, how to add it in Anki, the add-on's page.
+    assert.ok(html.includes('Suivre ce deck dans Anki'))
+    assert.ok(html.includes('href="/fr/d/ivan/verbes?edition=en"'), 'English edition tab')
+    assert.ok(html.includes('href="/fr/d/ivan/verbes?edition=fr"'), 'French edition tab')
+    const address = (code: string, page: string) =>
+      new RegExp(`data-testid="address-${code}"[^>]*>([^<]*)<`).exec(page)?.[1]
+    assert.equal(address('fr', html), `${origin}/d/ivan/verbes/fr/`, 'fr address')
+    assert.ok(!html.includes('data-testid="address-en"'), 'only the shown edition’s address')
+    assert.equal(
+      address('en', (await get('/fr/d/ivan/verbes?edition=en')).text),
+      `${origin}/d/ivan/verbes/en/`,
+      'en address on its tab',
+    )
+    assert.ok(html.includes('Outils › DeckDock › Ajouter'))
+    assert.ok(html.includes('href="https://github.com/NayanChauveau/anki-deck-manager"'))
+    // « En bref »: the https homepage as « Source ».
+    assert.ok(html.includes('En bref'))
+    assert.ok(html.includes('href="https://example.test/verbes"'), 'Source link')
     // Description: safe Markdown, the author's HTML as text.
     assert.ok(html.includes('<strong>irréguliers</strong>'))
     assert.ok(html.includes('&lt;b&gt;pas du HTML&lt;/b&gt;'))
     // The card preview: sandboxed iframes, never the card's own content in the page.
     const frames = [...html.matchAll(/<iframe\b[^>]*>/g)].map(([tag]) => tag)
-    assert.equal(frames.length, 4, 'two preview notes, front and back')
+    // The carousel shows one note at a time: the first one's front and back.
+    assert.equal(frames.length, 2, 'one preview note, front and back')
     for (const frame of frames) {
       assert.match(frame, /sandbox="allow-scripts"/)
       assert.ok(!frame.includes('allow-same-origin'), frame)
-      assert.match(frame, /src="\/preview\/ivan\/verbes\/fr\/[01]\/(front|back)"/)
+      assert.match(frame, /src="\/preview\/ivan\/verbes\/fr\/0\/(front|back)"/)
     }
+    assert.ok(html.includes('Note 1 sur 2'), 'the carousel position')
     assert.ok(!html.includes('CARD_SCRIPT_MARKER'), 'template content stays out of the page')
     // The version history of the shown edition, newest first.
     assert.ok(html.indexOf('>v2<') < html.indexOf('>v1<'), 'history newest first')
