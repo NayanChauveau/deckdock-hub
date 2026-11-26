@@ -2,7 +2,6 @@ import { validateDeckId, validateHandle } from '../domain/handle'
 import type { RecordId } from '../domain/model'
 import { indexText, parseServePath, type IndexEntry } from '../domain/serving'
 import type { DeckStatus } from '../domain/status'
-import type { FileMap } from './publish'
 
 /**
  * What serving reads: a deck by its public address, and the latest version of its editions
@@ -13,8 +12,16 @@ export interface ServeStore {
   deck(handle: string, deckId: string): Promise<{ id: RecordId; status: DeckStatus } | null>
   /** One entry per edition that has a latest version (any order). */
   latestVersions(deck: RecordId): Promise<IndexEntry[]>
-  /** The files of the edition's latest version (`deck.json`, `media/<file>`), or `null`. */
-  latestFiles(deck: RecordId, edition: string): Promise<FileMap | null>
+  /**
+   * One file of the edition's latest version, by its key in the version's file map (`deck.json`,
+   * `media/<file>`, compared exactly), or `null`. Never the whole map: an edition may list up to
+   * 20 000 files, and every media request is public.
+   */
+  latestFile(
+    deck: RecordId,
+    edition: string,
+    key: string,
+  ): Promise<{ sha256: string; size: number } | null>
 }
 
 export interface ServeDeps {
@@ -71,14 +78,11 @@ export async function serveDeckFile(deps: ServeDeps, request: ServeRequest): Pro
     const text = indexText(await deps.store.latestVersions(deck.id))
     return { kind: 'text', text, sha256: deps.hash(text), noindex }
   }
-  const files = await deps.store.latestFiles(deck.id, target.edition)
-  if (!files) return missing
   const [key, filename] =
     target.kind === 'deck'
       ? ['deck.json', 'deck.json']
       : [`media/${target.filename}`, target.filename]
-  // Own keys only: `__proto__` or `constructor` name no file.
-  const file = Object.hasOwn(files, key) ? files[key] : undefined
+  const file = await deps.store.latestFile(deck.id, target.edition, key)
   if (!file) return missing
   return {
     kind: 'blob',

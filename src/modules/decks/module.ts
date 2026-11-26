@@ -13,7 +13,7 @@ export const decksModule: SiteModule = {
   migrations: ['20261125_224245_decks'],
   routes: [
     'src/app/(frontend)/api/publish/[edition]/route.ts',
-    'src/app/(frontend)/d/[handle]/[deck]/[...path]/route.ts',
+    'src/app/(frontend)/d/[[...path]]/route.ts',
   ],
   files: [
     'tests/decks.addon.test.py',

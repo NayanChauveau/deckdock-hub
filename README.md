@@ -103,7 +103,7 @@ construit à partir de la dernière version de chaque édition, trié par éditi
   `media/<nom>` dans la liste des fichiers de la version : aucun chemin n’est construit à partir de
   l’adresse.
 - Médias : type déduit de l’extension par une liste fermée (images, son, vidéo, polices, CSS, JSON,
-  texte), sinon `application/octet-stream`, jamais `text/html`. CSP `default-src 'none'; sandbox`
+  texte), sinon `application/octet-stream`, jamais `text/html`. CSP `default-src 'none'; frame-ancestors 'none'; sandbox`
   (posée aussi dans `next.config.mjs`, dont les en-têtes l’emportent sur ceux de la route),
   `nosniff` et `Content-Disposition: inline; filename*=UTF-8''…`.
 - Deck en attente : servi avec `X-Robots-Tag: noindex`. Deck masqué : 410. Pseudo, deck, édition ou
