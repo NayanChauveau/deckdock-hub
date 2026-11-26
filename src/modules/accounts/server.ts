@@ -1,5 +1,6 @@
 import { getPayload, type Payload } from 'payload'
 import { logger } from '@/core/logger'
+import { extensionsOf } from '@/core/modules/resolve'
 import { devOrigin, site } from '@/core/site'
 import {
   closeAuthPool,
@@ -19,6 +20,7 @@ import {
   type DeletionReport,
 } from './application/delete-account'
 import { requestSignInLink } from './application/sign-in-link'
+import { isAccountsExtension, type AccountLink } from './extension'
 import { deletedPath, signInPath } from './paths'
 
 let instance: Auth | undefined
@@ -90,6 +92,14 @@ export function getAuth(): Auth {
 export async function visitorSession(headers: Headers): Promise<{ email: string } | null> {
   const session = await getAuth().api.getSession({ headers, query: { disableRefresh: true } })
   return session ? { email: session.user.email } : null
+}
+
+/** The pages other modules add to the account page, in `locale` (extensions.accounts). */
+export async function accountLinks(locale: string): Promise<AccountLink[]> {
+  const payload = await sitePayload()
+  return extensionsOf(payload, 'accounts', isAccountsExtension).flatMap((extension) => [
+    ...(extension.accountLinks?.(locale) ?? []),
+  ])
 }
 
 /** Forgets the instance and releases its pool (scripts and tests that must exit). */

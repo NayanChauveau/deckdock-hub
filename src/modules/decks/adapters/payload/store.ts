@@ -1,3 +1,4 @@
+import { sql } from '@payloadcms/db-postgres'
 import { ValidationError, type Payload, type PayloadRequest, type Where } from 'payload'
 import type { DecksStore } from '../../application/ports'
 import { DecksError } from '../../domain/errors'
@@ -138,13 +139,24 @@ export function payloadDecksStore(payload: Payload, req?: Partial<PayloadRequest
         await payload.update({ collection: 'decks', id: deck, data: review, ...system }),
       )
     },
-    async retire(deck, reason) {
-      await payload.update({
-        collection: 'decks',
-        id: deck,
-        data: { status: 'hidden', hiddenReason: reason, tokenHash: null },
-        ...system,
-      })
+    async retireDecksOfAuthor(authorId, reason) {
+      // One UPDATE, not Payload's bulk update (a write per document, whose failures are only
+      // collected): the decks are all hidden and revoked, or none. Run in the caller's transaction
+      // session when there is one (the customer's deletion), so it also rolls back with it.
+      const transactionID = req?.transactionID === undefined ? undefined : await req.transactionID
+      const session: unknown =
+        transactionID === undefined
+          ? undefined
+          : Reflect.get(Object(payload.db.sessions), transactionID)
+      const db =
+        (Reflect.get(Object(session), 'db') as typeof payload.db.drizzle | undefined) ??
+        payload.db.drizzle
+      const result = await db.execute<{ id: unknown }>(
+        sql`UPDATE decks SET status = 'hidden', hidden_reason = ${reason}, token_hash = NULL,
+              updated_at = now()
+            WHERE author_id = ${authorId} RETURNING id`,
+      )
+      return result.rows.length
     },
     async pendingDecks() {
       const { docs } = await payload.find({

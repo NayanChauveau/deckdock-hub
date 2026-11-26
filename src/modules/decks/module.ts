@@ -1,5 +1,5 @@
 import type { SiteModule } from '@/core/modules/types'
-import { accountDeletion } from './adapters/payload/account-deletion'
+import { accountsExtension } from './adapters/payload/account-deletion'
 import { Authors } from './adapters/payload/Authors'
 import { Decks } from './adapters/payload/Decks'
 import { Editions } from './adapters/payload/Editions'
@@ -11,8 +11,8 @@ export const decksModule: SiteModule = {
   // `authors.customer` points to the accounts module's `customers` collection.
   dependsOn: ['accounts'],
   collections: [Authors, Decks, Editions, Versions],
-  // A deleted account's decks are hidden and their tokens revoked (adapters/payload/account-deletion.ts).
-  extensions: { accounts: accountDeletion },
+  // Account deletion hides the decks; the account page links to the author space (account-deletion.ts).
+  extensions: { accounts: accountsExtension },
   // The review panel: pending decks, "Valider" and "Masquer" (admin/PendingDecks.tsx).
   dashboard: ['/modules/decks/admin/PendingDecks#PendingDecks'],
   migrations: ['20261125_224245_decks'],

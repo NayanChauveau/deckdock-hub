@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 import { isAdminCollectionUser } from '@/core/payload/access'
 import { pendingDecks, servePath } from '../server'
-import { ReviewActions } from './ReviewActions'
+import { ReviewList } from './ReviewList'
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', {
   dateStyle: 'medium',
@@ -29,32 +29,14 @@ export async function PendingDecks({ payload, user }: { payload: Payload; user?:
       <h2 id="pending-decks-title" style={{ marginTop: 0 }}>
         Decks en attente de validation
       </h2>
-      {decks.length === 0 ? (
-        <p>Aucun deck en attente.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {decks.map((deck) => (
-            <li
-              key={deck.id}
-              aria-label={`${deck.handle}/${deck.deckId}`}
-              style={{
-                padding: 'calc(var(--base) / 2) 0',
-                borderTop: '1px solid var(--theme-elevation-100)',
-              }}
-            >
-              <p style={{ margin: '0 0 calc(var(--base) / 4)' }}>
-                <strong>
-                  {deck.handle}/{deck.deckId}
-                </strong>{' '}
-                — créé le {dateFormat.format(deck.createdAt)} —{' '}
-                <a href={`/admin/collections/decks/${String(deck.id)}`}>fiche</a> —{' '}
-                <a href={servePath(deck.handle, deck.deckId, 'index.json')}>index.json</a>
-              </p>
-              <ReviewActions id={deck.id} name={`${deck.handle}/${deck.deckId}`} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <ReviewList
+        decks={decks.map((deck) => ({
+          id: deck.id,
+          name: `${deck.handle}/${deck.deckId}`,
+          createdAt: dateFormat.format(deck.createdAt),
+          index: servePath(deck.handle, deck.deckId, 'index.json'),
+        }))}
+      />
     </section>
   )
 }

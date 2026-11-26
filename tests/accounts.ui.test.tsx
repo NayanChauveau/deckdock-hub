@@ -149,3 +149,18 @@ void test('a deletion link refused by the rate limit says so, not that it expire
   render(<AccountView locale="en" email="visitor@example.test" linkError="too_many" />)
   assert.equal(screen.getByRole('alert').textContent, accountMessages.en.signIn.tooMany)
 })
+
+void test('my account links to the pages other modules add', () => {
+  const t = accountMessages.en.account
+  recordFetch()
+  render(
+    <AccountView
+      locale="en"
+      email="visitor@example.test"
+      links={[{ href: '/en/compte/decks', label: 'My decks' }]}
+    />,
+  )
+  const nav = screen.getByRole('navigation', { name: t.linksLabel })
+  assert.equal(nav.querySelector('a')?.getAttribute('href'), '/en/compte/decks')
+  assert.ok(screen.getByRole('link', { name: 'My decks' }))
+})

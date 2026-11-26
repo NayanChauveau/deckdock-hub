@@ -3,12 +3,18 @@ import { useEffect, useRef, useState } from 'react'
 import type { Locale } from '@/core/i18n/locales'
 import { Button } from '@/core/ui/button'
 import { Notice } from '@/core/ui/feedback/Notice'
-import { deckMessages } from '../messages'
-import type { Failed, RevokeResult, TokenResult } from './results'
+import { deckMessages, failureText } from '../messages'
+import {
+  failureOf,
+  type Failed,
+  type Failure,
+  type RevokeResult,
+  type TokenResult,
+} from './results'
 import { TokenReveal } from './TokenReveal'
 
 type Step = 'idle' | 'regenerate' | 'revoke'
-type Outcome = 'revoked' | 'signed_out' | 'error' | null
+type Outcome = 'revoked' | Failure | null
 
 /**
  * Regenerating (the new token is shown once) and revoking a deck's token. Both are confirmed first:
@@ -37,7 +43,7 @@ export function TokenPanel({
   }, [step])
 
   const failed = (result: Failed) => {
-    setOutcome(result.error === 'signed_out' ? 'signed_out' : 'error')
+    setOutcome(failureOf(result.error))
   }
   async function confirm() {
     setBusy(true)
@@ -126,10 +132,8 @@ export function TokenPanel({
         />
       )}
       {outcome === 'revoked' && <Notice>{t.revoked}</Notice>}
-      {(outcome === 'signed_out' || outcome === 'error') && (
-        <Notice tone="error">
-          {outcome === 'signed_out' ? messages.common.signedOut : messages.common.error}
-        </Notice>
+      {outcome && outcome !== 'revoked' && (
+        <Notice tone="error">{failureText(messages, outcome)}</Notice>
       )}
     </div>
   )

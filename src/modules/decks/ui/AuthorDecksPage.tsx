@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { signInPath } from '@/modules/accounts/paths'
+import { accountPath, signInPath } from '@/modules/accounts/paths'
 import { deckMessages } from '../messages'
 import { authorDeckPath } from '../paths'
 import { authorSpace } from '../server'
@@ -26,6 +26,11 @@ export default async function AuthorDecksPage(props: { params: Promise<{ locale:
     const t = messages.space
     return (
       <main className="commerce-page flex flex-col gap-8">
+        <p>
+          <Link href={accountPath(locale)} className="text-link">
+            {t.account}
+          </Link>
+        </p>
         <h1>{t.title}</h1>
         <p>{t.intro}</p>
         {author ? (

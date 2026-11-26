@@ -13,7 +13,7 @@ export const Customers = customersCollection({
   // What other modules do when an account goes (extensions.accounts, see extension.ts).
   beforeDelete: async ({ req, customerId }) => {
     for (const extension of extensionsOf(req.payload, 'accounts', isAccountsExtension))
-      await extension.beforeCustomerDelete({ req, customerId })
+      await extension.beforeCustomerDelete?.({ req, customerId })
   },
 })
 

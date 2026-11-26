@@ -1,14 +1,17 @@
 import type { DeckStatus } from './domain/status'
+import type { Failure } from './ui/results'
 
 const fr = {
   common: {
     busy: 'Un instant…',
     error: 'Impossible de traiter la demande. Réessayez dans quelques instants.',
     signedOut: 'Votre session a expiré. Reconnectez-vous pour continuer.',
+    maintenance: 'Le site est en maintenance : réessayez un peu plus tard.',
     cancel: 'Annuler',
   },
   space: {
     title: 'Mes decks',
+    account: 'Mon compte',
     intro:
       'Publiez vos decks DeckDock depuis leur dépôt : chaque deck a son jeton, que la CI utilise pour envoyer ses éditions au hub.',
     handleTitle: 'Choisissez votre pseudo',
@@ -112,10 +115,12 @@ const en: DeckMessages = {
     busy: 'One moment…',
     error: 'The request cannot be processed. Please try again in a few moments.',
     signedOut: 'Your session has expired. Sign in again to continue.',
+    maintenance: 'The website is under maintenance: please try again later.',
     cancel: 'Cancel',
   },
   space: {
     title: 'My decks',
+    account: 'My account',
     intro:
       'Publish your DeckDock decks from their repository: each deck has its token, which the CI uses to send its editions to the hub.',
     handleTitle: 'Choose your handle',
@@ -211,6 +216,14 @@ const en: DeckMessages = {
     revoked: 'The token is revoked. Regenerate one to publish again.',
   },
 }
+
+/** The text of a failure the forms show as a whole. */
+export const failureText = (messages: DeckMessages, failure: Failure): string =>
+  failure === 'signed_out'
+    ? messages.common.signedOut
+    : failure === 'maintenance'
+      ? messages.common.maintenance
+      : messages.common.error
 
 /** Visible texts of the author space, FR and EN. */
 export const deckMessages = { fr, en } satisfies Record<string, DeckMessages>

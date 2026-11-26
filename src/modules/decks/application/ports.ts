@@ -28,8 +28,11 @@ export interface DecksStore {
     deck: RecordId,
     review: { status: DeckStatus; hiddenReason: string | null },
   ): Promise<Deck>
-  /** Hides the deck with this reason and revokes its token, in one write. */
-  retire(deck: RecordId, reason: string): Promise<void>
+  /**
+   * Hides every deck of the author with this reason and revokes their tokens, in one statement:
+   * all or nothing, whatever the caller's transaction does with other documents. Returns how many.
+   */
+  retireDecksOfAuthor(authorId: RecordId, reason: string): Promise<number>
   /** The `pending` decks, oldest first. */
   pendingDecks(): Promise<PendingDeck[]>
   /** The deck's editions by code, each with its received versions, newest first. */

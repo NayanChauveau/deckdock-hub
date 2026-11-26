@@ -62,8 +62,9 @@ test('espace auteur : pseudo, deck, jeton copi√©, publication, validation par l‚
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await signIn(page, 'fr', `author-${suffix()}@example.test`)
 
-  // Handle: refused, then chosen.
-  await page.goto('/fr/compte/decks')
+  // Handle: refused, then chosen. The account page leads to the author space.
+  await page.getByRole('link', { name: t.space.title }).click()
+  await expect(page).toHaveURL(/\/fr\/compte\/decks$/)
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('heading', { level: 1, name: t.space.title })).toBeVisible()
   expect(await accessibilityViolations(page)).toEqual([])
@@ -107,6 +108,7 @@ test('espace auteur : pseudo, deck, jeton copi√©, publication, validation par l‚
   await expect(page).toHaveURL(/\/fr\/compte\/decks\/verbs$/)
   await expect(page.getByTestId('deck-status')).toHaveText(t.status.pending)
   await expect(page.getByRole('cell', { name: '2026-11-26-e2e' })).toBeVisible()
+  await expect(page.getByText('<edition>')).toHaveCount(0)
   const origin = new URL(page.url()).origin
   await expect(page.getByText(`${origin}/d/${handle}/verbs/en/`, { exact: true })).toBeVisible()
   await expect(page.getByText('DECKDOCK_TOKEN', { exact: true })).toBeVisible()

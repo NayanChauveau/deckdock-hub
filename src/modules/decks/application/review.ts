@@ -39,7 +39,5 @@ export const pendingDecks = (deps: DecksDeps): Promise<PendingDeck[]> => deps.st
 export async function retireAccountDecks(deps: DecksDeps, customerId: RecordId): Promise<number> {
   const author = await deps.store.authorOfCustomer(customerId)
   if (!author) return 0
-  const decks = await deps.store.decksOfAuthor(author.id)
-  for (const deck of decks) await deps.store.retire(deck.id, ACCOUNT_DELETED_REASON)
-  return decks.length
+  return deps.store.retireDecksOfAuthor(author.id, ACCOUNT_DELETED_REASON)
 }

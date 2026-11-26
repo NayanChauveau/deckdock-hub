@@ -77,9 +77,7 @@ export const reviewEndpoints: Endpoint[] = [
   {
     path: '/:id/hide',
     method: 'post',
-    handler: async (req) => {
-      const reason = await reasonOf(req)
-      return review(req, (deps, id) => hideDeck(deps, id, reason))
-    },
+    // The body is read only once the administrator is known (inside `review`).
+    handler: (req) => review(req, async (deps, id) => hideDeck(deps, id, await reasonOf(req))),
   },
 ]

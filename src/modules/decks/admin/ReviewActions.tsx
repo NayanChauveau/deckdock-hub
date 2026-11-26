@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useId, useState } from 'react'
 
 /** "Valider" and "Masquer" (with its reason) for one pending deck of the dashboard panel. */
-export function ReviewActions({ id, name }: { id: number; name: string }) {
+export function ReviewActions({
+  id,
+  name,
+  onDone,
+}: {
+  id: number
+  name: string
+  /** What happened, said by the panel (this row disappears once the deck is reviewed). */
+  onDone: (message: string) => void
+}) {
   const {
     config: {
       routes: { api },
@@ -18,6 +27,7 @@ export function ReviewActions({ id, name }: { id: number; name: string }) {
   const [reason, setReason] = useState('')
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState('')
+  const required = useId()
 
   async function act(action: 'approve' | 'hide') {
     setPending(true)
@@ -35,7 +45,7 @@ export function ReviewActions({ id, name }: { id: number; name: string }) {
         setMessage(typeof text === 'string' ? text : 'Action impossible pour le moment.')
         return
       }
-      setMessage(action === 'approve' ? `${name} est publié.` : `${name} est masqué.`)
+      onDone(action === 'approve' ? `${name} est publié.` : `${name} est masqué.`)
       router.refresh()
     } catch {
       setMessage('Action impossible pour le moment.')
@@ -75,10 +85,14 @@ export function ReviewActions({ id, name }: { id: number; name: string }) {
       {hiding && (
         <div className="field-type" style={{ marginTop: 'calc(var(--base) / 2)' }}>
           <label htmlFor={reasonId} className="field-label">
-            Raison du masquage (obligatoire, visible par l’auteur)
+            Raison du masquage
           </label>
+          <p id={required}>Obligatoire. Visible par l’auteur du deck.</p>
           <textarea
             id={reasonId}
+            required
+            aria-required="true"
+            aria-describedby={required}
             value={reason}
             rows={2}
             onChange={(event) => {
@@ -109,9 +123,7 @@ export function ReviewActions({ id, name }: { id: number; name: string }) {
           </div>
         </div>
       )}
-      <p role="status" aria-live="polite">
-        {message}
-      </p>
+      {message && <p role="alert">{message}</p>}
     </div>
   )
 }

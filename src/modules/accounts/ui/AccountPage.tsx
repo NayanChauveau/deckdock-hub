@@ -1,7 +1,7 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { asDeletionLinkError, signInPath } from '../paths'
-import { visitorSession } from '../server'
+import { accountLinks, visitorSession } from '../server'
 import { AccountView } from './AccountView'
 import { accountMetadata, accountPage, errorParam, type AccountPageProps } from './page-shell'
 
@@ -14,6 +14,13 @@ export default async function AccountPage(props: AccountPageProps) {
     const visitor = await visitorSession(await headers())
     if (!visitor)
       redirect(linkError ? `${signInPath(locale)}?error=${linkError}` : signInPath(locale))
-    return <AccountView locale={locale} email={visitor.email} linkError={linkError} />
+    return (
+      <AccountView
+        locale={locale}
+        email={visitor.email}
+        linkError={linkError}
+        links={await accountLinks(locale)}
+      />
+    )
   })
 }

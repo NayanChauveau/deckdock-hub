@@ -5,9 +5,9 @@ import type { Locale } from '@/core/i18n/locales'
 import { Button } from '@/core/ui/button'
 import { Notice } from '@/core/ui/feedback/Notice'
 import { TextField } from '@/core/ui/forms/TextField'
-import { deckMessages } from '../messages'
+import { deckMessages, failureText } from '../messages'
 import { authorDeckPath } from '../paths'
-import type { ActionError, CreateDeckResult } from './results'
+import { failureOf, type ActionError, type CreateDeckResult, type Failure } from './results'
 import { TokenReveal } from './TokenReveal'
 
 type FieldError = 'invalid_deck_id' | 'deck_exists' | 'no_handle'
@@ -27,7 +27,7 @@ export function NewDeckForm({
   const id = useId()
   const [deckId, setDeckId] = useState('')
   const [fieldError, setFieldError] = useState<FieldError | null>(null)
-  const [failure, setFailure] = useState<'signed_out' | 'error' | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -48,7 +48,7 @@ export function NewDeckForm({
         setCreated(result.deckId)
         setToken(result.token)
       } else if (isFieldError(result.error)) setFieldError(result.error)
-      else setFailure(result.error === 'signed_out' ? 'signed_out' : 'error')
+      else setFailure(failureOf(result.error))
     } catch {
       setFailure('error')
     } finally {
@@ -80,11 +80,7 @@ export function NewDeckForm({
             {busy ? messages.common.busy : t.newSubmit}
           </Button>
         </div>
-        {failure && (
-          <Notice tone="error">
-            {failure === 'signed_out' ? messages.common.signedOut : messages.common.error}
-          </Notice>
-        )}
+        {failure && <Notice tone="error">{failureText(messages, failure)}</Notice>}
       </form>
       {created && (
         <div className="flex flex-col gap-4">
