@@ -6,8 +6,9 @@ import { Transform, type Readable, type Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { EditionWorkspace, FileMap, PublishIssue } from '../../application/publish'
 import { isEditionCode } from '../../domain/edition'
-import type { DeckdockChecker } from '../python/checker'
+import { CheckerOutOfMemory, type DeckdockChecker } from '../python/checker'
 import { blobPath, putBlob } from './blob-store'
+import { declaredEdition } from './declared-edition'
 import { EDITION_LIMITS, ExtractError, extractEdition, type ExtractLimits } from './extract'
 
 /** The request body as received: its stream and its declared `Content-Length`, if any. */
@@ -20,10 +21,17 @@ export interface Upload {
 export const MAX_ISSUES = 100
 
 /**
- * Largest deck.json accepted: it is parsed in memory, here and by the checker (a container of
- * 1.5 GB), and a small gzip can expand to hundreds of MB within the extraction limit.
+ * Largest deck.json accepted (16 MiB): it is parsed in memory by the checker, then here, in a
+ * container of 1.5 GB, and a small gzip can expand to hundreds of MB within the extraction limit.
+ * A JSON built to be costly (`[[],[],…]`) takes about 15 times its size once parsed.
  */
-export const MAX_DECK_JSON_BYTES = 52_428_800
+export const MAX_DECK_JSON_BYTES = 16_777_216
+
+/**
+ * Time allowed to receive the whole body (120 s): a slow upload holds a publish slot, so a
+ * trickling one is cut off (408) instead of keeping the slot for good.
+ */
+export const UPLOAD_DEADLINE_MS = 120_000
 
 class TooLarge extends Error {}
 
@@ -81,6 +89,8 @@ export function editionWorkspace(options: {
   checker: DeckdockChecker
   limits?: ExtractLimits
   maxDeckJsonBytes?: number
+  /** Time allowed to receive the whole body, `UPLOAD_DEADLINE_MS` by default. */
+  uploadDeadlineMs?: number
   /** Where the received body is written (tests inject a failing one). */
   sink?: (path: string) => Writable
 }): EditionWorkspace {
@@ -93,6 +103,7 @@ export function editionWorkspace(options: {
   const staging = join(root, 'staging')
   const dist = join(root, 'dist')
   let editionDir = ''
+  let checked = false
   let parsed: unknown
   let fileMap: FileMap | null = null
 
@@ -119,13 +130,21 @@ export function editionWorkspace(options: {
           else done(null, chunk)
         },
       })
+      // The deadline aborts the pipeline, which destroys the body and the partial file.
+      const deadline = new AbortController()
+      const timer = setTimeout(() => {
+        deadline.abort()
+      }, options.uploadDeadlineMs ?? UPLOAD_DEADLINE_MS)
       try {
-        await pipeline(upload.body, meter, sink(archive))
+        await pipeline(upload.body, meter, sink(archive), { signal: deadline.signal })
       } catch (error) {
+        if (deadline.signal.aborted) return 'too_slow'
         if (error instanceof TooLarge) return 'too_large'
         // Only the client going away is an abort; anything else (the disk) is a server error.
         if (abortCode(error) !== null) throw new UploadAborted(error)
         throw error
+      } finally {
+        clearTimeout(timer)
       }
       return 'ok'
     },
@@ -166,17 +185,10 @@ export function editionWorkspace(options: {
         ]
       // The checker requires deck.edition to equal the directory's name: the directory is named
       // after deck.edition when it is usable, so that a different edition than the URL's is
-      // reported as a mismatch (409) rather than as a format error.
-      try {
-        parsed = JSON.parse(await readFile(join(staging, 'deck.json'), 'utf8'))
-      } catch {
-        parsed = undefined
-      }
-      const declared: unknown =
-        typeof parsed === 'object' && parsed !== null
-          ? Reflect.get(Object(Reflect.get(parsed, 'deck')), 'edition')
-          : undefined
-      const name = typeof declared === 'string' && isEditionCode(declared) ? declared : urlEdition
+      // reported as a mismatch (409) rather than as a format error. The edition is scanned, not
+      // parsed: the document is parsed only once the checker has accepted it (deckJson).
+      const declared = declaredEdition(await readFile(join(staging, 'deck.json'), 'utf8'))
+      const name = declared !== undefined && isEditionCode(declared) ? declared : urlEdition
       await mkdir(dist)
       editionDir = join(dist, name)
       await rename(staging, editionDir)
@@ -184,7 +196,20 @@ export function editionWorkspace(options: {
     },
 
     async check() {
-      const issues = await checker.check(dist)
+      let issues
+      try {
+        issues = await checker.check(dist)
+      } catch (error) {
+        if (!(error instanceof CheckerOutOfMemory)) throw error
+        return [
+          {
+            where: 'deck.json',
+            message:
+              'deck.json is too complex for the hub to check (the checker ran out of memory). Split the deck or simplify its structure.',
+          },
+        ]
+      }
+      checked = issues.length === 0
       const shown: PublishIssue[] = issues.slice(0, MAX_ISSUES).map((issue) => ({
         where: issue.where || 'deck.json',
         message: scrub(issue.message) + (issue.line === null ? '' : ` (line ${issue.line})`),
@@ -197,8 +222,10 @@ export function editionWorkspace(options: {
       return shown
     },
 
-    deckJson() {
-      return Promise.resolve(parsed)
+    async deckJson() {
+      if (!checked) throw new Error('deckJson() before a passed check()')
+      parsed ??= JSON.parse(await readFile(join(editionDir, 'deck.json'), 'utf8')) as unknown
+      return parsed
     },
 
     async files() {

@@ -10,9 +10,12 @@ import { authorDeckPath } from '../paths'
 import { failureOf, type ActionError, type CreateDeckResult, type Failure } from './results'
 import { TokenReveal } from './TokenReveal'
 
-type FieldError = 'invalid_deck_id' | 'deck_exists' | 'no_handle'
+type FieldError = 'invalid_deck_id' | 'deck_exists' | 'deck_limit' | 'no_handle'
 const isFieldError = (error: ActionError): error is FieldError =>
-  error === 'invalid_deck_id' || error === 'deck_exists' || error === 'no_handle'
+  error === 'invalid_deck_id' ||
+  error === 'deck_exists' ||
+  error === 'deck_limit' ||
+  error === 'no_handle'
 
 /** Creates a deck from its `deck.id`, then shows its first token once. */
 export function NewDeckForm({

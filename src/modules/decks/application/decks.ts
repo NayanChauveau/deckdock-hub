@@ -2,6 +2,7 @@ import { DecksError } from '../domain/errors'
 import { validateDeckId, validateHandle } from '../domain/handle'
 import type { Author, Deck, RecordId } from '../domain/model'
 import { isPublishTokenFormat, newPublishToken } from '../domain/token'
+import { MAX_DECKS_PER_AUTHOR } from '../domain/quotas'
 import type { DecksDeps } from './ports'
 
 export type { DecksDeps, DecksStore } from './ports'
@@ -45,6 +46,9 @@ export async function createDeck(
   const valid = validateDeckId(deckId)
   if (!valid.ok) throw new DecksError('invalid_deck_id')
   if (await deps.store.deckOf(author.id, valid.value)) throw new DecksError('deck_exists')
+  // Checked before the write: two concurrent creations may both pass at the limit (one extra).
+  if ((await deps.store.decksOfAuthor(author.id)).length >= MAX_DECKS_PER_AUTHOR)
+    throw new DecksError('deck_limit')
   const { token, hash } = newPublishToken(deps.random, deps.hash)
   const deck = await deps.store.createDeck(author.id, valid.value, hash)
   return { deck, token }

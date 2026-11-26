@@ -17,8 +17,10 @@ sans rien committer ([STARTER.md](STARTER.md), « Mettre à jour un site depuis 
 L’image `production` du starter ne contient que Node.js et le serveur Next.js, dans un conteneur
 en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés :
 
-- **Python et le vérificateur `deckdock`.** Le hub lance `python3 -m deckdock check --non-strict
-  --json <dossier>` et `python3 -m deckdock compat <précédent> <nouveau> --json`. La bibliothèque
+- **Python et le vérificateur `deckdock`.** Le hub lance `deckdock check --non-strict --json
+  <dossier>` et `deckdock compat <précédent> <nouveau> --json`, par `python3 -P -c <lanceur>` : le
+  lanceur limite l’espace d’adressage du processus à 768 Mio (`RLIMIT_AS`), puis exécute le module
+  comme `-m deckdock`. La bibliothèque
   demande Python 3.13, que Debian bookworm (la base Node du starter) ne fournit pas : l’interpréteur
   et sa bibliothèque standard sont copiés de l’image officielle `python:3.13.x-slim-bookworm`
   (même version de Debian, version et empreinte épinglées dans le `Dockerfile`), sans pip ni
@@ -45,6 +47,31 @@ l’image construite : version de `deckdock`, modules importés par la biblioth�
 extensions retirées bien absentes, absence de pip, vérification d’un deck valide et d’un
 deck invalide écrits sur `/data/hub`, deck toujours présent après la recréation des conteneurs.
 `tests/test_hub_image.py` relit le `Dockerfile` et `docker-compose.prod.yml`.
+
+## Écarts avec le code du starter
+
+Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starter ont dû changer.
+À reprendre à chaque `pnpm starter:update` :
+
+- **Module `accounts`** : `adapters/payload/Customers.ts` (crochet `beforeDelete` dans la
+  transaction de suppression), `module.ts` (les contributions des autres modules lues par
+  `extensionsOf`), `server.ts` (`accountLinks`), `ui/AccountView.tsx` et `ui/AccountPage.tsx` (liens
+  « Pages de votre compte »), `messages.ts` (leur libellé), et le nouveau `extension.ts` (contrat
+  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`).
+- **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
+- **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
+  `'none'` dans l’administration.
+- **`next.config.mjs`** : la CSP de base saute `/preview/`, et `/d/` reçoit la CSP des fichiers
+  servis.
+- **`src/app/robots.ts`** : `/d/` et `/preview/` exclus.
+- **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
+- **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
+- **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios
+  `decks` et `decks_http`.
+
+Candidats à remonter dans le starter : le point d’extension de `accounts` (`extension.ts`, suppression
+et liens du compte), un `frame-src` réglable séparément pour le site public et l’administration, et
+un emplacement de configuration par module dans `site.ts` (au lieu d’un schéma ajouté à la main).
 
 **À régler avant le premier déploiement** : le volume `hub-files` est géré par compose
 (`deckdock-hub-prod_hub-files`), hors de la liste des volumes du kit de déploiement : ni la
@@ -80,7 +107,12 @@ Un deck a trois états : `pending` (en attente), `approved` (validé) et `hidden
 | --- | --- | --- |
 | Archive envoyée (compressée) | 100 Mo, `HUB_MAX_UPLOAD_BYTES` ou `modules.decks.maxUploadBytes` | 413 |
 | Édition décompressée | 500 MiB et 20 000 fichiers ; chemins de 16 niveaux, 255 octets par segment, 1024 par chemin au plus | 422 |
-| `deck.json` | 50 Mio | 422, avant lecture |
+| `deck.json` | 16 Mio | 422, avant lecture |
+| Vérificateur | 768 Mio d’espace d’adressage par processus ; au-delà, « deck.json trop complexe » | 422 |
+| Durée d’un envoi | 120 s pour recevoir tout le corps | 408 |
+| Decks par auteur | 10, quel que soit leur état | espace auteur |
+| Versions d’un deck en attente | 3 au total (toutes éditions) jusqu’à sa validation | 403 |
+| Stockage par auteur | 2 Gio : taille des fichiers de toutes les versions de ses decks, chaque version comptée avec tous ses fichiers | 403 |
 | Publications simultanées | 2 par processus ; les autres attendent 30 s, puis 503 + `Retry-After` | application |
 | Publications par deck | 30 par 10 minutes (en mémoire, remis à zéro au redémarrage) | 429 |
 | Publications par IP | 30 par minute, rafale 10 | routeur Traefik `-publish` |
@@ -95,10 +127,11 @@ l’Action DeckDock). La réponse est toujours du JSON :
 `status` = `published`, `already_published`, `pending_review` ou `rejected`.
 
 - Contrôles, dans l’ordre : jeton (401), limite par deck (429, `Retry-After`), deck masqué (410),
-  édition de l’adresse (422), taille (413), décompression sûre et disposition `deck.json` +
+  édition de l’adresse (422), taille (413), envoi reçu en 120 s (408), décompression sûre et disposition `deck.json` +
   `media/<fichier>` (422), `deckdock check --non-strict` (422, une erreur par ligne), `deck.id` et
   `deck.edition` (409), version `dev` (422), version déjà reçue (200 `already_published` si mêmes
-  fichiers, sinon 409), `deckdock compat` avec la dernière version (409 si cassant, avertissement
+  fichiers, sinon 409), quotas de l’auteur (403 : 3 versions pour un deck en attente, 2 Gio par
+  auteur), `deckdock compat` avec la dernière version (409 si cassant, avertissement
   si un champ est ajouté à la fin). Puis les fichiers vont dans `HUB_DATA_DIR/blobs`, et
   l’édition, la version et la dernière version sont écrites dans une seule transaction.
 - L’envoi est copié dans `HUB_DATA_DIR/tmp/publish-<uuid>`, toujours supprimé ensuite. Taille
@@ -112,10 +145,26 @@ l’Action DeckDock). La réponse est toujours du JSON :
   routeur Traefik `-publish`, distinct du routeur `-auth` (5 par minute) pour qu’une CI publie
   plusieurs éditions d’affilée.
 - La maintenance du site ne bloque pas la publication : les auteurs publient avant l’ouverture.
-- Ressources bornées : un `deck.json` de plus de 50 Mio est refusé (422) avant d’être lu ; au plus
-  2 publications sont traitées à la fois par processus, les suivantes attendent une place 30 s
-  puis reçoivent 503 avec `Retry-After`. Un envoi interrompu par le client est journalisé en
-  avertissement et nettoyé.
+- Ressources bornées : un `deck.json` de plus de 16 Mio est refusé (422) avant d’être lu. Le hub ne
+  le lit d’abord que pour trouver `deck.edition` (lecture linéaire, sans construire le document) ;
+  il ne l’analyse qu’après l’accord du vérificateur, pour ne jamais tenir deux copies en mémoire. Le
+  vérificateur tourne avec 768 Mio d’espace d’adressage : s’il manque de mémoire (`MemoryError`,
+  code de sortie 3 du lanceur), la réponse est 422 « deck.json is too complex » ; s’il est tué ou
+  échoue autrement, 500 journalisé (`publish_failed`). Sous macOS, qui ne sait pas abaisser
+  `RLIMIT_AS`, le développement tourne sans cette limite ; sous Linux (l’image), son échec arrête
+  le vérificateur. Au plus 2 publications sont traitées à la fois par processus, les suivantes
+  attendent une place 30 s puis reçoivent 503 avec `Retry-After`. Un corps qui n’est pas reçu en
+  entier dans les 120 s est coupé (408, fichiers temporaires supprimés), pour qu’un envoi lent ne
+  garde pas une place. Un envoi interrompu par le client est journalisé en avertissement et
+  nettoyé.
+- Quotas : 10 decks par auteur (création refusée au-delà, message dans l’espace auteur) ; un deck en
+  attente reçoit au plus 3 versions, toutes éditions confondues, jusqu’à sa validation (403, entrée
+  `quota`) ; un auteur stocke au plus 2 Gio, somme de la taille des fichiers de chaque version de
+  ses decks (un fichier repris d’une version à l’autre compte à chaque fois), vérifiée avant
+  d’enregistrer (403, entrée `quota`). Une nouvelle exécution d’une version déjà reçue reste
+  `already_published`. Les contrôles précèdent l’écriture : deux envois simultanés peuvent dépasser
+  d’une version (une par place de publication). Constantes dans
+  `src/modules/decks/domain/quotas.ts`.
 - La dernière version d’une édition est toujours la dernière reçue : l’enregistrement verrouille la
   ligne de l’édition (`SELECT … FOR UPDATE`) et vérifie que la dernière version est encore celle
   comparée par `compat`. Sinon, les contrôles 8 et 9 reprennent une fois contre la nouvelle ; si elle
@@ -161,7 +210,10 @@ construit à partir de la dernière version de chaque édition, trié par éditi
   pour son auteur. Deck masqué : page « Deck retiré », avec le statut 404 (une page Next.js ne peut
   pas répondre 410 ; les adresses `/d/…` du plugin répondent bien 410).
 - **Aperçu** : 5 notes au plus (une par type de note d’abord), choisies à la publication et
-  gardées dans `versions.preview`. Chaque face est un document à part,
+  gardées dans `versions.preview`. Une note dont les champs dépassent 20 000 caractères, ou un type
+  de note dont la CSS ou un modèle les dépasse, est laissé de côté. Les modèles, les textes à trous
+  et les références aux médias (`[sound:…]`, `url(…)`) sont lus par des parcours linéaires, sans
+  expression régulière à retour arrière. Chaque face est un document à part,
   `/preview/<pseudo>/<deck-id>/<édition>/<n>/<front|back>`, servi avec la CSP
   `default-src 'none'; img-src <base>/<édition>/media/; media-src <base>/<édition>/media/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors 'self'`
   (répétée sans `sandbox` dans un `<meta>` en tête du document, avec `lang` et `<title>`)

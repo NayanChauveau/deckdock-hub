@@ -68,7 +68,29 @@ export function payloadPublishStore(
     return latest === undefined || latest === null ? null : Number(latest)
   }
 
+  /** One number from a query outside any transaction. */
+  const count = async (query: ReturnType<typeof sql>): Promise<number> => {
+    const result = await payload.db.drizzle.execute<{ value: unknown }>(query)
+    return Number(result.rows[0]?.value ?? 0)
+  }
+
   const store: PublishStore = {
+    versionCount(deck) {
+      return count(sql`
+        SELECT count(*) AS value FROM versions v
+        JOIN editions e ON e.id = v.edition_id
+        WHERE e.deck_id = ${deck}`)
+    },
+    authorStoredBytes(deck) {
+      // Every file of every version of the author's decks (files: { path: { sha256, size } }).
+      return count(sql`
+        SELECT coalesce(sum((f.value->>'size')::bigint), 0) AS value
+        FROM versions v
+        JOIN editions e ON e.id = v.edition_id
+        JOIN decks d ON d.id = e.deck_id
+        CROSS JOIN LATERAL jsonb_each(v.files) AS f
+        WHERE d.author_id = (SELECT author_id FROM decks WHERE id = ${deck})`)
+    },
     async edition(deck, code) {
       const doc = await findEdition(deck, code)
       if (!doc) return null

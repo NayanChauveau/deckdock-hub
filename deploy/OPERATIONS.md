@@ -97,11 +97,17 @@ acceptés pour cette étape) ; ne rien supprimer sous `blobs/` sans comparer à 
 
 ### Limites et réponses d’erreur
 
-Les valeurs (archive de 100 Mo, 500 MiB et 20 000 fichiers, `deck.json` de 50 Mio, 2 publications
-simultanées, 30 par deck et par 10 minutes, routeur Traefik `-publish` à 30 par minute) sont dans le
-README, section « Limites ». `HUB_MAX_UPLOAD_BYTES` règle la taille de l’archive sans modifier le
+Les valeurs (archive de 100 Mo, 500 MiB et 20 000 fichiers, `deck.json` de 16 Mio, vérificateur à
+768 Mio d’espace d’adressage, envoi reçu en 120 s, 2 publications simultanées, 30 par deck et par 10
+minutes, routeur Traefik `-publish` à 30 par minute) sont dans le README, section « Limites ».
+
+Quotas par auteur (`src/modules/decks/domain/quotas.ts`) : 10 decks ; 3 versions au plus pour un
+deck en attente, jusqu’à sa validation ; 2 Gio stockés, comptés comme la somme des tailles des
+fichiers de chaque version (403 avec une entrée `quota`). Pour un auteur légitime qui atteint un
+quota, il n’y a pas de réglage : changer la constante demande un déploiement. `HUB_MAX_UPLOAD_BYTES` règle la taille de l’archive sans modifier le
 code. Des **429** sur `/api/publish/` viennent du compteur par deck (application) ou par IP
-(Traefik) ; des **503** de la file de 2 publications. Un auteur peut relancer sa CI : les envois
+(Traefik) ; des **503** de la file de 2 publications ; des **408** d’un envoi qui a duré plus de
+120 s ; des **403** des quotas. Un auteur peut relancer sa CI : les envois
 sont idempotents.
 
 ### Journaux et surveillance
@@ -110,6 +116,14 @@ sont idempotents.
   l’édition et la cause, jamais un chemin ni le jeton). Une erreur disque (`ENOSPC`, droits) est
   journalisée en erreur avec une réponse 500 : vérifier l’espace du volume.
 - L’espace disque de `hub-files` n’est pas surveillé (le contrôle horaire est HTTP).
+- Un vérificateur à court de mémoire donne un 422 « deck.json is too complex » à l’auteur, sans
+  journal d’erreur ; un vérificateur tué (par exemple par le noyau) donne un 500 journalisé
+  `publish_failed`.
+
+> **À RÉGLER AVANT D’OUVRIR LES INSCRIPTIONS.** Mettre en place une alerte sur l’espace disque du VPS
+> (volume `hub-files` compris) : les quotas bornent chaque auteur (2 Gio), pas le nombre d’auteurs.
+> C’est une étape d’infrastructure du propriétaire, hors de ce dépôt (aucune modification manuelle
+> du VPS depuis ici).
 - La publication et le service `/d/…` restent ouverts pendant la maintenance du site.
 
 ### Écarts avec l’image du starter

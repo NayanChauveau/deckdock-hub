@@ -1,18 +1,27 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { after, test } from 'node:test'
 import { blobPath } from '../src/modules/decks/adapters/files/blob-store'
+import { declaredEdition } from '../src/modules/decks/adapters/files/declared-edition'
 import {
   editionWorkspace,
   MAX_DECK_JSON_BYTES,
+  UPLOAD_DEADLINE_MS,
   UploadAborted,
   type Upload,
 } from '../src/modules/decks/adapters/files/workspace'
-import type { CheckIssue, DeckdockChecker } from '../src/modules/decks/adapters/python/checker'
+import {
+  CHECKER_MAX_MEMORY_BYTES,
+  CheckerError,
+  CheckerOutOfMemory,
+  pythonChecker,
+  type CheckIssue,
+  type DeckdockChecker,
+} from '../src/modules/decks/adapters/python/checker'
 import {
   DEFAULT_MAX_UPLOAD_BYTES,
   hubDataDir,
@@ -223,7 +232,7 @@ void test('HUB_DATA_DIR is made absolute', () => {
 })
 
 void test('a deck.json over the limit is refused before it is read', async () => {
-  assert.equal(MAX_DECK_JSON_BYTES, 52_428_800)
+  assert.equal(MAX_DECK_JSON_BYTES, 16_777_216)
   const dir = await dataDir()
   const body = JSON.stringify(deckJson())
   const ws = editionWorkspace({
@@ -298,4 +307,176 @@ void test('a disk that fails while the body is written is a server error, not an
   })
   await ws.dispose()
   assert.deepEqual(await readdir(join(dir, 'tmp')), [])
+})
+
+void test('deck.edition is scanned without parsing the document', () => {
+  const doc = (deck: unknown, extra = '') =>
+    `{"format":"deckdock/1",${extra}"deck":${JSON.stringify(deck)},"notes":[[1,{"a":"}"}]]}`
+  assert.equal(declaredEdition(doc({ id: 'x', edition: 'fr' })), 'fr')
+  assert.equal(declaredEdition(JSON.stringify(deckJson({ edition: 'pt-BR' }), null, 2)), 'pt-BR')
+  // Escapes are decoded; nested "edition" keys elsewhere are ignored.
+  assert.equal(declaredEdition(doc({ edition: 'f\u00e9' })), 'f\u00e9')
+  assert.equal(declaredEdition(doc({ x: { edition: 'no' }, edition: 'en' })), 'en')
+  assert.equal(
+    declaredEdition(`{"notes":{"deck":{"edition":"no"}},"deck":{"name":"n"}}`),
+    undefined,
+  )
+  // The last key wins, as in JSON.parse.
+  assert.equal(declaredEdition('{"deck":{"edition":"a","edition":"b"}}'), 'b')
+  assert.equal(declaredEdition('{"deck":{"edition":"a"},"deck":{}}'), undefined)
+  assert.equal(declaredEdition('{"deck":{"edition":"a","edition":3}}'), undefined)
+  for (const text of ['', '[]', '{not json', '{"deck":', '{"deck":{"edition":"a', '{"deck":"x"}'])
+    assert.equal(declaredEdition(text), undefined, text)
+  // Linear on a pathological document.
+  const start = performance.now()
+  declaredEdition(`{"x":${'['.repeat(1_000_000)}`)
+  declaredEdition(`{"x":"${'\\'.repeat(1_000_000)}`)
+  assert.ok(performance.now() - start < 500)
+})
+
+void test('deck.json is parsed only after the checker accepted it', async () => {
+  const dir = await dataDir()
+  let checking = false
+  const checker: DeckdockChecker = {
+    check: async () => {
+      checking = true
+      return []
+    },
+    compat: async () => [],
+  }
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: upload(await editionArchive(deckJson({ edition: 'fr' }))),
+    checker,
+  })
+  await ws.receive()
+  assert.deepEqual(await ws.unpack('fr'), [])
+  await assert.rejects(ws.deckJson(), /before a passed check/)
+  assert.deepEqual(await ws.check(), [])
+  assert.ok(checking)
+  assert.equal(
+    Reflect.get(Object(Reflect.get(Object(await ws.deckJson()), 'deck')), 'edition'),
+    'fr',
+  )
+  await ws.dispose()
+  // A refused check never leads to a parse.
+  const refused = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: upload(await editionArchive(deckJson())),
+    checker: fakeChecker(() => [{ path: '', where: 'deck', message: 'bad', line: null }]).checker,
+  })
+  await refused.receive()
+  await refused.unpack('en')
+  assert.equal((await refused.check()).length, 1)
+  await assert.rejects(refused.deckJson())
+  await refused.dispose()
+})
+
+void test('a checker out of memory is a refusal of a too complex deck.json', async () => {
+  const dir = await dataDir()
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: upload(await editionArchive(deckJson())),
+    checker: {
+      check: () => Promise.reject(new CheckerOutOfMemory('check')),
+      compat: async () => [],
+    },
+  })
+  await ws.receive()
+  await ws.unpack('en')
+  const issues = await ws.check()
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0]?.where, 'deck.json')
+  assert.match(present(issues[0]).message, /too complex/)
+  await ws.dispose()
+})
+
+void test('the checker runs under an address-space limit, MemoryError has its own status', async () => {
+  assert.equal(CHECKER_MAX_MEMORY_BYTES, 768 * 1024 * 1024)
+  const dir = await dataDir()
+  // A fake interpreter: records its arguments, answers with the status in STATUS.
+  const python = join(dir, 'fake-python')
+  const argsFile = join(dir, 'args')
+  const fake = (status: number, stdout = '') =>
+    writeFile(
+      python,
+      `#!/bin/sh\nfor a in "$@"; do printf '%s\\n--\\n' "$a"; done > '${argsFile}'\nprintf '%s' '${stdout}'\nexit ${status}\n`,
+    ).then(() => chmod(python, 0o700))
+  const checker = pythonChecker({ HUB_PYTHON: python, PATH: process.env['PATH'] }, 10_000, 1234)
+  await fake(0, '{"ok":true,"issues":[]}')
+  assert.deepEqual(await checker.check('/tmp/dist'), [])
+  const args = (await readFile(argsFile, 'utf8')).split('\n--\n')
+  assert.equal(args[0], '-P')
+  assert.equal(args[1], '-c')
+  assert.match(args[2] ?? '', /resource\.setrlimit\(resource\.RLIMIT_AS, \(1234, 1234\)\)/)
+  assert.match(
+    args[2] ?? '',
+    /runpy\.run_module\('deckdock', run_name='__main__', alter_sys=True\)/,
+  )
+  assert.deepEqual(args.slice(3, 7), ['check', '--non-strict', '--json', '/tmp/dist'])
+  await fake(3)
+  await assert.rejects(checker.check('/tmp/dist'), CheckerOutOfMemory)
+  await fake(137)
+  await assert.rejects(checker.check('/tmp/dist'), (error: unknown) => {
+    assert.ok(error instanceof CheckerError && !(error instanceof CheckerOutOfMemory))
+    return true
+  })
+})
+
+void test(
+  'the real checker runs through the launcher',
+  { skip: !process.env['HUB_PYTHON'] },
+  async () => {
+    const dir = await dataDir()
+    const edition = join(dir, 'dist', 'en')
+    await mkdir(join(edition, 'media'), { recursive: true })
+    await writeFile(join(edition, 'deck.json'), JSON.stringify(deckJson()))
+    await writeFile(join(edition, 'media', 'a.png'), MEDIA)
+    const checker = pythonChecker({
+      HUB_PYTHON: process.env['HUB_PYTHON'],
+      PATH: process.env['PATH'],
+      PYTHONPATH: join(process.cwd(), 'vendor/deckdock'),
+    })
+    assert.deepEqual(await checker.check(join(dir, 'dist')), [])
+  },
+)
+
+void test('an upload not received in time is too slow, and is cleaned up', async () => {
+  assert.equal(UPLOAD_DEADLINE_MS, 120_000)
+  const dir = await dataDir()
+  // A body that trickles one byte every 20 ms and never ends.
+  let timer: NodeJS.Timeout | undefined
+  const body = new Readable({
+    read() {
+      timer = setTimeout(() => this.push(Buffer.alloc(1, 1)), 20)
+    },
+  })
+  body.on('error', () => undefined) // as the route does
+  const ws = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: { body, declaredLength: null },
+    checker: fakeChecker().checker,
+    uploadDeadlineMs: 150,
+  })
+  const started = performance.now()
+  assert.equal(await ws.receive(), 'too_slow')
+  clearTimeout(timer)
+  assert.ok(performance.now() - started < 2000)
+  assert.ok(body.destroyed)
+  await ws.dispose()
+  assert.deepEqual(await readdir(join(dir, 'tmp')), [])
+  // A body received within the deadline is unaffected.
+  const fast = editionWorkspace({
+    dataDir: dir,
+    maxUploadBytes: 1024 * 1024,
+    upload: upload(await editionArchive(deckJson())),
+    checker: fakeChecker().checker,
+    uploadDeadlineMs: 5_000,
+  })
+  assert.equal(await fast.receive(), 'ok')
+  await fast.dispose()
 })

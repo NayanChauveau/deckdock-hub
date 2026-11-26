@@ -25,6 +25,47 @@ export class CheckerError extends Error {
   }
 }
 
+/**
+ * The checker ran out of its address space (`MemoryError` under the limit): the deck.json is too
+ * complex to check, a refusal (422) rather than a server error.
+ */
+export class CheckerOutOfMemory extends Error {
+  constructor(command: string) {
+    super(`deckdock ${command}: out of memory`)
+    this.name = 'CheckerOutOfMemory'
+  }
+}
+
+/**
+ * Address space of one checker process (768 MiB, more than its resident memory, which stays lower).
+ * A valid deck.json of at most 16 MiB is checked well within it (even 16 MiB of `[[],[],…]` is);
+ * one built to blow up the parser stops with a MemoryError instead of exhausting the 1.5 GB
+ * container that two checkers (the publish slots) share with the site.
+ */
+export const CHECKER_MAX_MEMORY_BYTES = 768 * 1024 * 1024
+
+/** Exit status of the launcher when the checker raised MemoryError. */
+const OUT_OF_MEMORY_EXIT = 3
+
+/**
+ * `python3 -P -c LAUNCHER <args>`: limits the address space, then runs `deckdock` as `-m` would.
+ * The limit is mandatory on Linux (the image); macOS cannot lower RLIMIT_AS, so development runs
+ * there without it.
+ */
+const launcher = (maxMemoryBytes: number) =>
+  [
+    'import resource, runpy, sys',
+    'try:',
+    `    resource.setrlimit(resource.RLIMIT_AS, (${maxMemoryBytes}, ${maxMemoryBytes}))`,
+    'except (ValueError, OSError):',
+    "    if sys.platform != 'darwin':",
+    '        raise',
+    'try:',
+    "    runpy.run_module('deckdock', run_name='__main__', alter_sys=True)",
+    'except MemoryError:',
+    `    sys.exit(${OUT_OF_MEMORY_EXIT})`,
+  ].join('\n')
+
 const get = (value: unknown, key: string): unknown =>
   typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
@@ -33,11 +74,13 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
  * The interpreter is `HUB_PYTHON` (default `python3`, the image's 3.13). It finds the library on
  * `PYTHONPATH` (`/opt/deckdock` in the image, `vendor/deckdock` in development and tests). It runs
  * with `-P` (no current directory on `sys.path`, so nothing uploaded can be imported) and with a
- * minimal environment: none of the site's secrets reach it.
+ * minimal environment: none of the site's secrets reach it. Its address space is limited to
+ * `maxMemoryBytes` (see `launcher`).
  */
 export function pythonChecker(
   env: Record<string, string | undefined> = process.env,
   timeoutMs = 120_000,
+  maxMemoryBytes = CHECKER_MAX_MEMORY_BYTES,
 ): DeckdockChecker {
   const python = env['HUB_PYTHON'] || 'python3'
   const childEnv = {
@@ -53,12 +96,16 @@ export function pythonChecker(
     new Promise<string>((resolve, reject) => {
       execFile(
         python,
-        ['-P', '-m', 'deckdock', ...args],
+        ['-P', '-c', launcher(maxMemoryBytes), ...args],
         { env: childEnv, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' },
         (error: (Error & { code?: unknown }) | null, stdout: string, stderr: string) => {
           const code = error ? error.code : 0
           if (code === 0 || code === 1) {
             resolve(stdout)
+            return
+          }
+          if (code === OUT_OF_MEMORY_EXIT) {
+            reject(new CheckerOutOfMemory(args[0] ?? ''))
             return
           }
           const detail = stderr.trim().split('\n').at(-1) ?? ''

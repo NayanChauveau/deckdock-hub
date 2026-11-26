@@ -20,6 +20,7 @@ import {
   revokeToken,
   type DecksDeps,
 } from '../src/modules/decks/application/decks'
+import { MAX_DECKS_PER_AUTHOR } from '../src/modules/decks/domain/quotas'
 import { DecksError } from '../src/modules/decks/domain/errors'
 import { sha256Hex } from '../src/modules/decks/composition'
 import { inMemoryDecksStore } from './support/in-memory-decks'
@@ -200,4 +201,15 @@ void test('regenerate invalidates the old token; revoke leaves none; malformed i
   }
   assert.equal(await deckForToken(counting, 'not-a-token'), null)
   assert.equal(lookups, 0)
+})
+
+void test('an author creates at most 10 decks', async () => {
+  assert.equal(MAX_DECKS_PER_AUTHOR, 10)
+  const d = deps()
+  await chooseHandle(d, 1, 'alice')
+  for (let n = 0; n < MAX_DECKS_PER_AUTHOR; n++) await createDeck(d, 1, `deck-${n}`)
+  assert.equal(await code(createDeck(d, 1, 'one-more')), 'deck_limit')
+  // Another author is not affected.
+  await chooseHandle(d, 2, 'bob')
+  assert.equal((await createDeck(d, 2, 'one-more')).deck.deckId, 'one-more')
 })

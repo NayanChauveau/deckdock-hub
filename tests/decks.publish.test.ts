@@ -12,6 +12,10 @@ import {
   type PublishStore,
 } from '../src/modules/decks/application/publish'
 import { isEditionCode } from '../src/modules/decks/domain/edition'
+import {
+  MAX_AUTHOR_STORED_BYTES,
+  MAX_PENDING_DECK_VERSIONS,
+} from '../src/modules/decks/domain/quotas'
 import { windowRateLimiter } from '../src/modules/decks/adapters/http/rate-limit'
 import { semaphore } from '../src/modules/decks/adapters/http/semaphore'
 import { inMemoryDecksStore } from './support/in-memory-decks'
@@ -41,7 +45,7 @@ const deckJson = (over: Record<string, unknown> = {}) => ({
 
 /** One upload's scripted outcomes; every call is recorded. */
 interface Script {
-  receive?: 'ok' | 'too_large'
+  receive?: 'ok' | 'too_large' | 'too_slow'
   unpack?: PublishIssue[]
   check?: PublishIssue[]
   deck?: unknown
@@ -103,6 +107,8 @@ function inMemoryPublishStore() {
    * call: another version of the edition committed between step 9 and step 10.
    */
   const interleaved: Omit<Stored, 'edition'>[] = []
+  /** Bytes the author's other decks already take. */
+  let otherDecksBytes = 0
   const push = (edition: { id: number; latest: number | null }, value: Omit<Stored, 'edition'>) => {
     const id = versions.length + 1
     versions.push({ ...value, id, edition: edition.id, summary: {} })
@@ -159,9 +165,21 @@ function inMemoryPublishStore() {
       edition.latest = id
       return 'created'
     },
+    versionCount: async (deck) =>
+      versions.filter((v) => editions.find((e) => e.id === v.edition)?.deck === deck).length,
+    // One author in these tests: every version counts, with all its files.
+    authorStoredBytes: async () =>
+      otherDecksBytes +
+      versions.reduce(
+        (total, v) => total + Object.values(v.files).reduce((sum, file) => sum + file.size, 0),
+        0,
+      ),
   }
   return {
     store,
+    useBytes: (bytes: number) => {
+      otherDecksBytes = bytes
+    },
     editions,
     versions,
     records,
@@ -645,4 +663,73 @@ void test('the publish semaphore: holders, waiting in order, timeout, release on
   )
   dRelease()
   assert.deepEqual(slots.state(), { active: 0, waiting: 0 })
+})
+
+void test('a pending deck receives at most 3 versions until it is approved', async () => {
+  assert.equal(MAX_PENDING_DECK_VERSIONS, 3)
+  const ctx = await setup()
+  for (const n of [1, 2, 3]) {
+    const { deps } = ctx.deps({
+      deck: deckJson({ version: `v${n}` }),
+      files: { 'deck.json': { sha256: sha(`v${n}`), size: 10 } },
+    })
+    assert.equal((await run(deps, ctx.token)).body.status, 'pending_review')
+  }
+  // Another edition counts too: 3 versions in total.
+  const fourth = ctx.deps({
+    deck: deckJson({ version: 'v4', edition: 'fr' }),
+    files: { 'deck.json': { sha256: sha('v4'), size: 10 } },
+  })
+  const refused = await run(fourth.deps, ctx.token, 'fr')
+  assert.equal(refused.httpStatus, 403)
+  assert.equal(refused.body.status, 'rejected')
+  assert.equal(present(refused.body.errors[0]).where, 'quota')
+  assert.match(present(refused.body.errors[0]).message, /awaits approval.*3 versions/)
+  assert.ok(!fourth.calls.includes('keep'), 'nothing stored')
+  assert.equal(ctx.publish.versions.length, 3)
+  // A re-run of a received version is still recognised.
+  const rerun = ctx.deps({
+    deck: deckJson({ version: 'v2' }),
+    files: { 'deck.json': { sha256: sha('v2'), size: 10 } },
+  })
+  assert.equal((await run(rerun.deps, ctx.token)).body.status, 'already_published')
+  // Once approved, the deck publishes again.
+  await ctx.setStatus('approved')
+  assert.equal((await run(fourth.deps, ctx.token, 'fr')).body.status, 'published')
+})
+
+void test('an author stores at most 2 GiB, counted over every version and its files', async () => {
+  assert.equal(MAX_AUTHOR_STORED_BYTES, 2 * 1024 ** 3)
+  const ctx = await setup()
+  await ctx.setStatus('approved')
+  ctx.publish.useBytes(MAX_AUTHOR_STORED_BYTES - 100)
+  const fits = ctx.deps({
+    deck: deckJson({ version: 'v1' }),
+    files: {
+      'deck.json': { sha256: sha('v1'), size: 60 },
+      'media/a.png': { sha256: sha('a'), size: 40 },
+    },
+  })
+  assert.equal((await run(fits.deps, ctx.token)).body.status, 'published')
+  // The same media again in a new version still counts: the limit is reached.
+  const over = ctx.deps({
+    deck: deckJson({ version: 'v2' }),
+    files: { 'deck.json': { sha256: sha('v2'), size: 1 } },
+  })
+  const refused = await run(over.deps, ctx.token)
+  assert.equal(refused.httpStatus, 403)
+  assert.equal(present(refused.body.errors[0]).where, 'quota')
+  assert.match(present(refused.body.errors[0]).message, /2\.00 GiB the hub stores per author/)
+  assert.ok(!over.calls.includes('keep'), 'checked before storing')
+})
+
+void test('an upload not received in time is refused with 408', async () => {
+  const ctx = await setup()
+  const { deps, calls } = ctx.deps({ receive: 'too_slow' })
+  const result = await run(deps, ctx.token)
+  assert.equal(result.httpStatus, 408)
+  assert.equal(present(result.body.errors[0]).where, 'archive')
+  assert.match(present(result.body.errors[0]).message, /took too long/)
+  assert.deepEqual(calls, ['receive', 'dispose'])
+  assert.equal(ctx.slots.released, ctx.slots.taken)
 })
