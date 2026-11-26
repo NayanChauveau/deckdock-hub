@@ -27,7 +27,7 @@ export default async function DeckNotFound() {
       : false
   const [title, text] = gone ? [t.goneTitle, t.goneText] : [t.missingTitle, t.missingText]
   return (
-    <main className="state-screen">
+    <div className="state-screen">
       <title>{`${title} | ${site.identity.displayName}`}</title>
       <meta name="robots" content="noindex, nofollow" />
       <p className="eyebrow">{site.identity.displayName} · 404</p>
@@ -36,7 +36,7 @@ export default async function DeckNotFound() {
       <Link className="text-link" href={cataloguePath(locale)}>
         {t.catalogue}
       </Link>
-    </main>
+    </div>
   )
 }
 

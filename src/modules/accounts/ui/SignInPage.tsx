@@ -28,12 +28,12 @@ export default async function SignInPage(props: AccountPageProps) {
           ? t.signIn.tooMany
           : error && t.signIn.linkError
     return (
-      <main className="commerce-page flex flex-col gap-8">
+      <div className="commerce-page flex flex-col gap-8">
         <h1>{t.signIn.title}</h1>
         {notice && <Notice tone="error">{notice}</Notice>}
         <p>{t.signIn.intro}</p>
         <SignInForm locale={locale} />
-      </main>
+      </div>
     )
   })
 }

@@ -1,14 +1,13 @@
-import { MaintenancePage } from '@/core/ui/Maintenance'
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import { RichText } from '@payloadcms/richtext-lexical/react'
 import { isLocale, type Locale } from '@/core/i18n/locales'
 import { messages } from '@/site/messages'
 import { legalLabels, legalPath, legalSlugs, type LegalPageKey } from '@/core/i18n/legal'
-import { getLegalPages, getSiteData } from '@/site/site-data'
+import { getLegalPages } from '@/site/site-data'
 import { alternates, robots } from '@/core/http/seo'
-import { maintenanceMetadata, requestMaintenance } from '@/core/http/maintenance'
-import { SiteFooter, SiteHeader } from '@/site/SiteChrome'
+import { maintenanceMetadata } from '@/core/http/maintenance'
+import { PublicShell } from '@/site/PublicShell'
 import { site } from '@/core/site'
 import { siteMessages } from '@/site/messages'
 
@@ -43,7 +42,12 @@ export function legalPage(key: LegalPageKey, slug: string) {
     const { locale } = await params
     if (!isLocale(locale)) notFound()
     if (legalSlugs[locale][key] !== slug) redirect(legalPath(locale, key))
-    return <LegalPage locale={locale} pageKey={key} />
+    // While visitors are kept out, PublicShell renders nothing: the page is never read.
+    return (
+      <PublicShell locale={locale} paths={pathsFor(key)}>
+        <LegalPage locale={locale} pageKey={key} />
+      </PublicShell>
+    )
   }
 
   return { generateMetadata, Page }
@@ -52,31 +56,21 @@ export function legalPage(key: LegalPageKey, slug: string) {
 const pathsFor = (key: LegalPageKey) => ({ fr: legalPath('fr', key), en: legalPath('en', key) })
 
 async function LegalPage({ locale, pageKey: key }: { locale: Locale; pageKey: LegalPageKey }) {
-  if ((await requestMaintenance()).visitorBlocked)
-    return <MaintenancePage locale={locale} text={siteMessages[locale].maintenanceText} />
   const t = messages[locale]
-  const [pages, { settings }] = await Promise.all([getLegalPages(locale), getSiteData(locale)])
+  const pages = await getLegalPages(locale)
   const page = pages[key]
-  const name = settings.siteName || site.identity.displayName
   return (
-    <div className="site-shell">
-      <a className="skip-link" href="#main">
-        {t.skip}
-      </a>
-      <SiteHeader locale={locale} name={name} paths={pathsFor(key)} />
-      <main id="main" className="legal-page">
-        <p className="eyebrow">{t.legalNavigation}</p>
-        <h1>{page.title || legalLabels[locale][key]}</h1>
-        <div className="legal-body">
-          {page.body ? <RichText data={page.body} disableContainer /> : <p>{t.legalPending}</p>}
-        </div>
-        {key === 'terms' && (
-          <p className="legal-meta">
-            {t.legalUpdated} : {pages.terms.version}
-          </p>
-        )}
-      </main>
-      <SiteFooter locale={locale} name={name} text={settings.footerText} />
+    <div className="legal-page">
+      <p className="eyebrow">{t.legalNavigation}</p>
+      <h1>{page.title || legalLabels[locale][key]}</h1>
+      <div className="legal-body">
+        {page.body ? <RichText data={page.body} disableContainer /> : <p>{t.legalPending}</p>}
+      </div>
+      {key === 'terms' && (
+        <p className="legal-meta">
+          {t.legalUpdated} : {pages.terms.version}
+        </p>
+      )}
     </div>
   )
 }

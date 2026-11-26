@@ -26,7 +26,7 @@ export function AccountView({
   const messages = accountMessages[locale]
   const t = messages.account
   return (
-    <main className="commerce-page flex flex-col gap-8">
+    <div className="commerce-page flex flex-col gap-8">
       <h1>{t.title}</h1>
       {linkError && (
         <Notice tone="error">
@@ -50,6 +50,6 @@ export function AccountView({
         </nav>
       )}
       <AccountActions locale={locale} email={email} {...(navigate ? { navigate } : {})} />
-    </main>
+    </div>
   )
 }

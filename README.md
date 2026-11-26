@@ -57,7 +57,15 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   transaction de suppression), `module.ts` (les contributions des autres modules lues par
   `extensionsOf`), `server.ts` (`accountLinks`), `ui/AccountView.tsx` et `ui/AccountPage.tsx` (liens
   « Pages de votre compte »), `messages.ts` (leur libellé), et le nouveau `extension.ts` (contrat
-  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`).
+  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`, `visitorName`).
+- **En-tête et pied de page communs** (`src/site/PublicShell.tsx`, `SiteChrome.tsx`,
+  `HeaderMenus.tsx`, `viewer.ts`) : les routes des pages de module (`compte/*`, `decks`, `d/…`)
+  ne réexportent plus la page, elles l’enveloppent dans `shellPage` (un module n’importe pas la
+  couche du site) ; `layout.tsx`, `not-found.tsx`, `error.tsx`, `page.tsx` et
+  `(legal)/legal-page.tsx` utilisent le cadre ; `src/core/ui/Maintenance.tsx` et les pages du
+  module `accounts` (`SignInPage`, `DeletedPage`, `AccountView`) rendent un `<div>`, le `<main>`
+  étant celui du cadre ; `src/styles/site.css` (en-tête, menus, pied). Le contrat
+  `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête).
 - **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
 - **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
   `'none'` dans l’administration.

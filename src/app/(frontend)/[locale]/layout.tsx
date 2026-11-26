@@ -12,6 +12,7 @@ import { SiteIdentityProvider } from '@/core/ui/site-identity'
 import { siteMessages } from '@/site/messages'
 import { ThemeScript } from '@/core/ui/theme/ThemeScript'
 import { ThemeSync } from '@/core/ui/theme/ThemeToggle'
+import { SiteFrame } from '@/site/SiteChrome'
 
 // Pages opt into indexing individually; anything else (tracking, errors) stays noindex.
 export async function generateMetadata({
@@ -49,7 +50,10 @@ export default async function Layout({
       <body>
         <SiteIdentityProvider identity={{ displayName: site.identity.displayName }}>
           {maintenance.visitorBlocked ? (
-            <MaintenancePage locale={locale} text={siteMessages[locale].maintenanceText} />
+            // The site's frame without an account entry: no session is read for a kept-out visitor.
+            <SiteFrame locale={locale} viewer={null}>
+              <MaintenancePage locale={locale} text={siteMessages[locale].maintenanceText} />
+            </SiteFrame>
           ) : (
             <>
               {maintenance.active && <MaintenanceBanner locale={locale} />}

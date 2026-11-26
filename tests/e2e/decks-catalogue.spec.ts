@@ -54,7 +54,7 @@ test('catalogue : recherche sans accents et filtre de langue', async ({ page }) 
 
   // Language filter: English matches (the deck has an English edition), German does not.
   await page.getByRole('searchbox', { name: t.searchLabel }).fill('')
-  await page.getByLabel(t.languageLabel).selectOption('en')
+  await page.getByLabel(t.languageLabel, { exact: true }).selectOption('en')
   await page.getByRole('button', { name: t.submit }).click()
   await expect(page).toHaveURL(/lang=en/)
   await expect(deck).toBeVisible()
@@ -74,6 +74,11 @@ test('page de deck en français : éditions, adresse à copier, aperçu isolé',
   await expect(page).toHaveURL(new RegExp(`${deckPath('fr')}$`))
   await expect(page.getByRole('heading', { level: 1, name: 'Verbes irréguliers' })).toBeVisible()
   await expect(page.getByText('CC-BY-4.0')).toBeVisible()
+  // The shared header and footer; FR · EN lead to this deck in the other language.
+  const banner = page.getByRole('banner')
+  await expect(page.getByRole('contentinfo')).toBeVisible()
+  await expect(banner.getByRole('link', { name: /^EN/ })).toHaveAttribute('href', deckPath('en'))
+  await expect(banner.getByRole('link', { name: /^FR/ })).toHaveAttribute('href', deckPath('fr'))
   const origin = new URL(page.url()).origin
   const address = `${origin}/d/${approved.handle}/${approved.deckId}/fr/`
   await expect(page.getByTestId('address-fr')).toHaveText(address)
@@ -117,6 +122,9 @@ test('un deck en attente n’existe pas pour les visiteurs', async ({ page }) =>
   const response = await page.goto(`/fr/d/${pending.handle}/${pending.deckId}`)
   expect(response?.status()).toBe(404)
   await expect(page.getByText(pending.name)).toHaveCount(0)
+  await expect(page.getByRole('banner')).toBeVisible()
+  await expect(page.getByRole('main')).toHaveCount(1)
+  await expect(page.getByRole('contentinfo')).toBeVisible()
   await page.goto(`/fr/decks?q=${encodeURIComponent(pending.name)}`)
   await expect(page.getByText(pending.name)).toHaveCount(0)
 })

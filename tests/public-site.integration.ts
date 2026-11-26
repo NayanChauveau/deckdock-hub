@@ -67,6 +67,18 @@ try {
     'Page de maintenance pour les visiteurs',
   )
   assert.ok(!visitor.includes('Portrait de test français'), 'Contenu masqué pendant la maintenance')
+  // The shared header and footer frame it, without the account entry (no session is read).
+  assert.equal(visitor.match(/<header/g)?.length, 1, 'En-tête commun sur la page de maintenance')
+  assert.equal(
+    visitor.match(/<footer/g)?.length,
+    1,
+    'Pied de page commun sur la page de maintenance',
+  )
+  assert.equal(visitor.match(/<main/g)?.length, 1, 'Un seul <main>')
+  assert.ok(
+    !visitor.includes('href="/fr/compte/connexion"'),
+    'Pas d’entrée de compte en maintenance',
+  )
   const legalDuringMaintenance = await (await fetch(`${origin}/en/privacy`)).text()
   assert.ok(legalDuringMaintenance.includes(messages.en.maintenanceTitle))
   const blockedSignIn = await signIn()
@@ -85,6 +97,9 @@ try {
   const adminView = await (await fetch(`${origin}/fr`, { headers: { Cookie: adminCookie } })).text()
   assert.ok(adminView.includes('Portrait de test français'), 'Site réel pour un administrateur')
   assert.ok(adminView.includes('Mode maintenance'), 'Bandeau de rappel pour l’administrateur')
+  assert.equal(adminView.match(/<header/g)?.length, 1, 'En-tête commun pour l’administrateur')
+  // An administrator is not a visitor: the header offers the visitor sign-in.
+  assert.ok(adminView.includes('href="/fr/compte/connexion"'), 'Connexion pour un administrateur')
   assert.notEqual(
     (await signIn(adminCookie)).status,
     503,
@@ -226,7 +241,7 @@ try {
       )
     }
   assert.ok(
-    fr.includes('href="/fr/conditions-generales-de-vente"') && en.includes('href="/en/privacy"'),
+    fr.includes('href="/fr/mentions-legales"') && en.includes('href="/en/privacy"'),
     'Pied de page relié aux pages légales',
   )
   // A legal slug of the other language leads to the page in the URL's language.

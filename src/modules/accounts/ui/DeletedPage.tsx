@@ -9,7 +9,7 @@ export default async function DeletedPage(props: AccountPageProps) {
   return accountPage(props, (locale) => {
     const t = accountMessages[locale].deleted
     return (
-      <main className="commerce-page flex flex-col gap-8">
+      <div className="commerce-page flex flex-col gap-8">
         <h1>{t.title}</h1>
         <p>{t.body}</p>
         <p>
@@ -17,7 +17,7 @@ export default async function DeletedPage(props: AccountPageProps) {
             {t.back}
           </Link>
         </p>
-      </main>
+      </div>
     )
   })
 }

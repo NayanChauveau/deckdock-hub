@@ -60,7 +60,7 @@ export default async function CataloguePage({ params, searchParams }: Props) {
       return text ? `${cataloguePath(locale)}?${text}` : cataloguePath(locale)
     }
     return (
-      <main className="commerce-page flex flex-col gap-8">
+      <div className="commerce-page flex flex-col gap-8">
         <h1>{t.title}</h1>
         <p>{t.intro}</p>
         <form
@@ -145,7 +145,7 @@ export default async function CataloguePage({ params, searchParams }: Props) {
             )}
           </nav>
         )}
-      </main>
+      </div>
     )
   })
 }

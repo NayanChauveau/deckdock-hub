@@ -88,7 +88,7 @@ function DeckView({ locale, page }: { locale: Locale; page: Found }) {
   const editionHref = (code: string) =>
     `${deckPagePath(locale, page.handle, page.deckId)}?edition=${encodeURIComponent(code)}`
   return (
-    <main className="commerce-page flex flex-col gap-8">
+    <div className="commerce-page flex flex-col gap-8">
       <p>
         <Link href={cataloguePath(locale)} className="text-link">
           {t.catalogue}
@@ -241,6 +241,6 @@ function DeckView({ locale, page }: { locale: Locale; page: Found }) {
           </table>
         </div>
       </section>
-    </main>
+    </div>
   )
 }

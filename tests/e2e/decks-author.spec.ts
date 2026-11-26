@@ -67,6 +67,9 @@ test('espace auteur : pseudo, deck, jeton copié, publication, validation par l�
   await expect(page).toHaveURL(/\/fr\/compte\/decks$/)
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('heading', { level: 1, name: t.space.title })).toBeVisible()
+  // No handle yet: the header's menu is « Compte ».
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
   expect(await accessibilityViolations(page)).toEqual([])
   const handleField = page.getByRole('textbox', { name: t.space.handleLabel })
   await handleField.fill('A!')
@@ -76,7 +79,16 @@ test('espace auteur : pseudo, deck, jeton copié, publication, validation par l�
   const handle = `auteur-${suffix()}`
   await handleField.fill(handle)
   await page.getByRole('button', { name: t.space.handleSubmit }).click()
-  await expect(page.getByText(handle, { exact: true })).toBeVisible()
+  await expect(page.getByRole('main').getByText(handle, { exact: true })).toBeVisible()
+  // The header now names the menu after the handle, from the page's refresh.
+  await expect(banner.getByRole('button', { name: new RegExp(`^${handle}`) })).toBeVisible()
+  await banner.getByRole('button', { name: new RegExp(`^${handle}`) }).click()
+  await expect(banner.getByRole('link', { name: t.space.title })).toHaveAttribute(
+    'href',
+    '/fr/compte/decks',
+  )
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.keyboard.press('Escape')
   await expect(page.getByText(t.space.noDecks)).toBeVisible()
 
   // A deck and its token, shown once and copied.

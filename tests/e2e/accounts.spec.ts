@@ -91,6 +91,43 @@ test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà ser
   expect(await accessibilityViolations(page)).toEqual([])
 })
 
+test('en-tête : menu « Compte » une fois connecté, déconnexion depuis le menu', async ({
+  page,
+}) => {
+  const email = newVisitor('fr')
+  await signIn(page, 'fr', email)
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toHaveCount(0)
+  const menu = banner.getByRole('button', { name: /^Compte/ })
+  await expect(menu).toHaveAttribute('aria-expanded', 'false')
+  await menu.click()
+  await expect(banner.getByRole('link', { name: 'Compte' })).toHaveAttribute('href', '/fr/compte')
+  expect(await accessibilityViolations(page)).toEqual([])
+  // Also on a page of the site layer, and the same in the dark theme.
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/fr/mentions-legales')
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  await banner.getByRole('button', { name: /^Compte/ }).click()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await banner.getByRole('button', { name: 'Déconnexion' }).click()
+  await expect(page).toHaveURL(/\/fr$/)
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toBeVisible()
+  await page.goto('/fr/compte')
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion$/)
+})
+
+test('en-tête : à 390 px, le compte est dans le menu mobile', async ({ page }) => {
+  await signIn(page, 'en', newVisitor('en'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('button', { name: /^Account/ })).toBeHidden()
+  await banner.getByRole('button', { name: 'Menu' }).click()
+  await expect(banner.getByRole('link', { name: 'My decks' })).toBeVisible()
+  await expect(banner.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await noOverflowAt390(page)
+})
+
 test('account: My account in English, then signing out of every device', async ({
   page,
   browser,

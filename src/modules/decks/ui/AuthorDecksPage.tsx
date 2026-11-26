@@ -25,7 +25,7 @@ export default async function AuthorDecksPage(props: { params: Promise<{ locale:
     const messages = deckMessages[locale]
     const t = messages.space
     return (
-      <main className="commerce-page flex flex-col gap-8">
+      <div className="commerce-page flex flex-col gap-8">
         <p>
           <Link href={accountPath(locale)} className="text-link">
             {t.account}
@@ -71,7 +71,7 @@ export default async function AuthorDecksPage(props: { params: Promise<{ locale:
             <HandleForm locale={locale} choose={chooseHandleAction} />
           </section>
         )}
-      </main>
+      </div>
     )
   })
 }

@@ -19,6 +19,7 @@ test('CSP : le site et l’administration envoient une politique avec nonce', as
 for (const path of [
   '/fr',
   '/en',
+  '/fr/decks',
   '/fr/conditions-generales-de-vente',
   '/en/privacy',
   '/fr/page-inexistante',
@@ -29,7 +30,7 @@ for (const path of [
   })
 }
 
-for (const path of ['/fr', '/fr/mentions-legales']) {
+for (const path of ['/fr', '/fr/mentions-legales', '/en/decks', '/fr/page-inexistante']) {
   test(`mobile 390 px sans débordement horizontal : ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(path)
@@ -39,6 +40,90 @@ for (const path of ['/fr', '/fr/mentions-legales']) {
     expect(overflow).toBeLessThanOrEqual(0)
   })
 }
+
+// Every public page of the site layer and of the modules that needs no data or session: the
+// deck, account and author pages are checked by their module's own specs.
+const shellPages = [
+  '/fr',
+  '/en',
+  '/fr/decks',
+  '/en/decks',
+  '/fr/compte/connexion',
+  '/en/compte/connexion',
+  '/fr/compte/supprime',
+  '/fr/mentions-legales',
+  '/en/legal-notice',
+  '/fr/confidentialite',
+  '/en/privacy',
+  '/fr/page-inexistante',
+  '/en/page-inexistante',
+]
+
+test('en-tête et pied de page communs sur toutes les pages publiques', async ({ page }) => {
+  for (const path of shellPages) {
+    await page.goto(path)
+    await expect(page.getByRole('banner'), path).toHaveCount(1)
+    await expect(page.getByRole('main'), path).toHaveCount(1)
+    await expect(page.getByRole('contentinfo'), path).toHaveCount(1)
+    const locale = path.startsWith('/en') ? 'en' : 'fr'
+    await expect(page.getByRole('banner').getByRole('link', { name: 'Catalogue' })).toHaveAttribute(
+      'href',
+      `/${locale}/decks`,
+    )
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('link', { name: locale === 'fr' ? 'Connexion' : 'Sign in' }),
+    ).toBeVisible()
+  }
+})
+
+test('FR · EN mène à la même page dans l’autre langue', async ({ page }) => {
+  await page.goto('/fr/mentions-legales')
+  await page.getByRole('banner').getByRole('link', { name: /^EN/ }).click()
+  await expect(page).toHaveURL(/\/en\/legal-notice$/)
+  await page.goto('/en/decks')
+  await page.getByRole('banner').getByRole('link', { name: /^FR/ }).click()
+  await expect(page).toHaveURL(/\/fr\/decks$/)
+})
+
+test('le lien Catalogue de l’en-tête mène au catalogue', async ({ page }) => {
+  await page.goto('/fr/mentions-legales')
+  await page.getByRole('banner').getByRole('link', { name: 'Catalogue' }).click()
+  await expect(page).toHaveURL(/\/fr\/decks$/)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+})
+
+test('menu mobile : à 390 px, il s’ouvre et se referme au clavier', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/fr/decks')
+  const banner = page.getByRole('banner')
+  // The desktop links are folded into the menu.
+  await expect(banner.getByRole('link', { name: 'Catalogue' })).toBeHidden()
+  const button = banner.getByRole('button', { name: 'Menu' })
+  await button.focus()
+  await page.keyboard.press('Enter')
+  await expect(button).toHaveAttribute('aria-expanded', 'true')
+  const catalogue = banner.getByRole('link', { name: 'Catalogue' })
+  await expect(catalogue).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(catalogue).toBeFocused()
+  expect(await accessibilityViolations(page)).toEqual([])
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(0)
+  await page.keyboard.press('Escape')
+  await expect(button).toHaveAttribute('aria-expanded', 'false')
+  await expect(button).toBeFocused()
+  await expect(catalogue).toBeHidden()
+})
+
+test('menu mobile : absent sur ordinateur, où les liens sont dans l’en-tête', async ({ page }) => {
+  await page.goto('/fr')
+  await expect(page.getByRole('banner').getByRole('button', { name: 'Menu' })).toBeHidden()
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Guide' })).toBeVisible()
+})
 
 const isDark = (page: Page) =>
   page.evaluate(() => document.documentElement.classList.contains('dark'))
@@ -114,6 +199,7 @@ test('mode sombre : choix mémorisé après rechargement et navigation', async (
 for (const path of [
   '/fr',
   '/en',
+  '/fr/decks',
   '/fr/conditions-generales-de-vente',
   '/en/privacy',
   '/fr/page-inexistante',

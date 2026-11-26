@@ -36,7 +36,7 @@ export default async function AuthorDeckPage(props: Props) {
     const messages = deckMessages[locale]
     const t = messages.deck
     return (
-      <main className="commerce-page flex flex-col gap-8">
+      <div className="commerce-page flex flex-col gap-8">
         <p>
           <Link href={authorSpacePath(locale)} className="text-link">
             {t.back}
@@ -102,7 +102,7 @@ export default async function AuthorDeckPage(props: Props) {
           </dl>
           <p>{t.ciOutro}</p>
         </section>
-      </main>
+      </div>
     )
   })
 }
