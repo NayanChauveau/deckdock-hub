@@ -51,6 +51,41 @@ deck invalide écrits sur `/data/hub`, deck toujours présent après la recréat
 sauvegarde faite avant chaque déploiement, ni la sauvegarde de la nuit d’infra-traefik ne le
 contiennent encore.
 
+## Modération
+
+Un deck a trois états : `pending` (en attente), `approved` (validé) et `hidden` (masqué).
+
+- Le premier envoi d’un deck le laisse **en attente** : il n’est ni dans le catalogue ni indexé, mais
+  il est servi au plugin (`X-Robots-Tag: noindex`) et visible de son auteur, qui peut le tester. Les
+  versions suivantes d’un deck validé sont publiées directement.
+- **Valider / Masquer** : le tableau de bord de l’administration (`/admin`) liste les decks en
+  attente (pseudo/deck, date, lien vers la fiche, `index.json`) avec les boutons **Valider** et
+  **Masquer**. Ces actions exigent un administrateur connecté avec sa double authentification
+  (TOTP) ; un visiteur, même propriétaire du deck, reçoit 403. Elles sont aussi possibles depuis la
+  fiche du deck (champs état et raison), avec les mêmes règles.
+- **Masquer** exige une raison non vide (affichée sur la page « Deck retiré » et dans la fiche).
+  Un deck masqué disparaît du catalogue, ses adresses `/d/…` répondent 410, la publication est
+  refusée (410) et sa page répond 404 avec un message « retiré ». Un administrateur peut le valider
+  de nouveau (la raison est alors effacée).
+- **Compte supprimé** : supprimer un compte visiteur (par lui-même, par un administrateur ou par la
+  tâche de nettoyage) masque ses decks avec la raison « Compte supprimé » et révoque leurs jetons,
+  dans la transaction de la suppression. Ces decks **ne peuvent pas être validés de nouveau**
+  (l’auteur est détaché de son compte) et le pseudo reste réservé.
+- Le pseudo est choisi une fois et ne change plus (un auteur qui s’est trompé s’adresse à un
+  administrateur).
+
+## Limites
+
+| Limite | Valeur | Où |
+| --- | --- | --- |
+| Archive envoyée (compressée) | 100 Mo, `HUB_MAX_UPLOAD_BYTES` ou `modules.decks.maxUploadBytes` | 413 |
+| Édition décompressée | 500 MiB et 20 000 fichiers ; chemins de 16 niveaux, 255 octets par segment, 1024 par chemin au plus | 422 |
+| `deck.json` | 50 Mio | 422, avant lecture |
+| Publications simultanées | 2 par processus ; les autres attendent 30 s, puis 503 + `Retry-After` | application |
+| Publications par deck | 30 par 10 minutes (en mémoire, remis à zéro au redémarrage) | 429 |
+| Publications par IP | 30 par minute, rafale 10 | routeur Traefik `-publish` |
+| Service `/d/…` | aucune limite Traefik (le plugin ne réessaie pas sur 429) | — |
+
 ## API de publication
 
 `POST /api/publish/<édition>` (module `decks`) reçoit l’archive `tar.gz` d’une édition compilée,
