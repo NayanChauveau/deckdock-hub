@@ -24,6 +24,8 @@ import {
   truncateDescription,
 } from '../src/modules/decks/domain/markdown'
 import {
+  MAX_PREVIEW_TEXT_CHARS,
+  mediaName,
   mediaReferences,
   parsePreview,
   previewOf,
@@ -648,4 +650,154 @@ void test('markdown: descriptions are capped for summaries and for the deck page
   const long = truncateDescription('x'.repeat(30_000))
   assert.equal(long.truncated, true)
   assert.equal(long.text.length, MAX_DESCRIPTION_CHARS)
+  // A cut never ends on half of a character (a high surrogate without its pair).
+  const emoji = '\u{1F600}'
+  const atPair = truncateDescription('x'.repeat(MAX_DESCRIPTION_CHARS - 1) + emoji.repeat(3))
+  assert.equal(atPair.text, 'x'.repeat(MAX_DESCRIPTION_CHARS - 1))
+  assert.equal(truncateDescription(`ab${emoji}`, 3).text, 'ab')
+  assert.equal(truncateDescription(`a${emoji}b`, 3).text, `a${emoji}`)
+  const summary = markdownText('x'.repeat(MAX_SUMMARY_SOURCE_CHARS - 1) + emoji.repeat(3))
+  assert.equal(summary, 'x'.repeat(MAX_SUMMARY_SOURCE_CHARS - 1))
+  assert.ok(!/[\ud800-\udbff]$/.test(summary))
+})
+
+/** A small deterministic generator of strings over an alphabet of tricky pieces. */
+function* randomTexts(pieces: string[], count: number, maxPieces: number): Generator<string> {
+  let seed = 42
+  const next = () => {
+    seed = (seed * 48271) % 2147483647
+    return seed
+  }
+  for (let n = 0; n < count; n++) {
+    let text = ''
+    const length = next() % maxPieces
+    for (let k = 0; k < length; k++) text += pieces[next() % pieces.length] ?? ''
+    yield text
+  }
+}
+
+void test('preview scanners: same results as the reference patterns', () => {
+  // The former regular expressions, kept here as the reference for the linear scanners.
+  const CLOZE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g
+  const SOUND = /\[sound:([^\]]*)\]/g
+  const URL_REF = /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi
+  const TAG = /\{\{([\s\S]*?)\}\}/g
+  const clozeNote = (Text: string) => note({ Text, Extra: '' }, 'cloze')
+  const referenceCloze = (value: string, side: 'front' | 'back') => {
+    let lowest = Infinity
+    for (const match of value.matchAll(CLOZE)) lowest = Math.min(lowest, Number(match[1]))
+    const active = Number.isFinite(lowest) ? lowest : 1
+    return value.replace(CLOZE, (_all, n: string, text: string, hint: string | undefined) => {
+      if (Number(n) !== active) return text
+      if (side === 'back') return `<span class="cloze">${text}</span>`
+      return `<span class="cloze">[${hint ?? '...'}]</span>`
+    })
+  }
+  const clozeOnly: Notetype = {
+    ...cloze,
+    templates: [{ name: 'Cloze', front: '{{cloze:Text}}', back: '{{cloze:Text}}' }],
+  }
+  const clozePieces = ['{{c1::', '{{c2::', '{{c', '{{', '1', '::', ':', '}}', '}', 'a', 'b', '{']
+  for (const text of randomTexts(clozePieces, 4000, 14)) {
+    for (const side of ['front', 'back'] as const) {
+      const expected = referenceCloze(text, side)
+      // Field values carry no media here, so the rewrite leaves them untouched.
+      if (/src|sound/.test(expected)) continue
+      assert.equal(renderCard(clozeOnly, clozeNote(text), 0, side, media), expected, text)
+    }
+  }
+  const tagPieces = ['{{', '}}', '{', '}', 'Front', '#Front', '/Front', '^Front', ':', ' ', 'x']
+  const tagged = { Front: 'F', Back: '' }
+  for (const template of randomTexts(tagPieces, 3000, 12)) {
+    // The reference tokenizer: same text pieces and tag bodies, in order.
+    const pieces: string[] = []
+    let last = 0
+    for (const match of template.matchAll(TAG)) {
+      pieces.push(`t:${template.slice(last, match.index)}`, `g:${match[1] ?? ''}`)
+      last = match.index + match[0].length
+    }
+    pieces.push(`t:${template.slice(last)}`)
+    const nt: Notetype = { ...basic, templates: [{ name: 'c', front: template, back: '' }] }
+    // A template whose tags all render empty (unknown fields, stray closings) is its text pieces.
+    const plainTags = pieces.every((piece) => {
+      const body = piece.slice(2).trim()
+      return piece.startsWith('t:') || (!body.includes('Front') && !/^[#^]/.test(body))
+    })
+    if (plainTags) {
+      const expected = pieces
+        .filter((piece) => piece.startsWith('t:'))
+        .map((piece) => piece.slice(2))
+        .join('')
+      assert.equal(renderCard(nt, note(tagged), 0, 'front', media), expected, template)
+    }
+  }
+  const refPieces = ['url(', 'URL(', 'xurl(', '[sound:', ']', '"', "'", ')', ' ', 'a.png', '(', 'b']
+  for (const text of randomTexts(refPieces, 4000, 12)) {
+    const expected: string[] = []
+    for (const match of text.matchAll(SOUND)) expected.push(`s:${match[1]}`)
+    for (const match of text.matchAll(URL_REF))
+      expected.push(`u:${match[1] ?? match[2] ?? match[3]}`)
+    const names = (list: string[]) =>
+      list.map((entry) => entry.slice(2).trim()).filter((name) => name === 'a.png' || name === 'b')
+    assert.deepEqual(
+      mediaReferences(text).filter((name) => name === 'a.png' || name === 'b'),
+      [
+        ...names(expected.filter((entry) => entry.startsWith('s:'))),
+        ...names(expected.filter((entry) => entry.startsWith('u:'))),
+      ],
+      text,
+    )
+    // The stylesheet rewrite replaces exactly the reference pattern's matches.
+    const cssMedia = (name: string) => (name === 'a.png' ? 'A' : '')
+    const expectedCss = text.replace(URL_REF, (all, a?: string, b?: string, c?: string) => {
+      const name = mediaName(a ?? b ?? c ?? '')
+      return name === null ? all : `url("${cssMedia(name)}")`
+    })
+    const doc = cardDocument({ ...basic, css: text }, '', cssMedia, {
+      mediaBase: 'https://hub.test/m/',
+      title: 't',
+    })
+    const css = doc.slice(doc.indexOf('<style>') + 7, doc.lastIndexOf('</style>'))
+    assert.equal(css, expectedCss, text)
+  }
+})
+
+void test('preview: adversarial inputs render in linear time', () => {
+  const sizes = [MAX_PREVIEW_TEXT_CHARS, 200_000]
+  const time = (label: string, run: () => unknown) => {
+    const start = performance.now()
+    run()
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < 200, `${label}: ${elapsed.toFixed(0)} ms`)
+  }
+  for (const size of sizes) {
+    const repeat = (unit: string) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size)
+    const clozeText = repeat('{{c1::')
+    time(`{{c1:: x ${size}`, () =>
+      renderCard(cloze, note({ Text: clozeText, Extra: '' }, 'cloze'), 0, 'back', media),
+    )
+    time(`{{ x ${size}`, () =>
+      renderCard(
+        { ...basic, templates: [{ name: 'c', front: repeat('{{'), back: repeat('{{') }] },
+        note({ Front: 'a' }),
+        0,
+        'back',
+        media,
+      ),
+    )
+    for (const unit of ['url(', '[sound:', 'src=', 'src="', 'url("', "url('"]) {
+      const text = repeat(unit)
+      time(`${unit} x ${size} (references)`, () => mediaReferences(text))
+      time(`${unit} x ${size} (render)`, () =>
+        renderCard(basic, note({ Front: text }), 0, 'front', media),
+      )
+      time(`${unit} x ${size} (stylesheet)`, () =>
+        cardDocument({ ...basic, css: text }, '', media, { mediaBase: 'https://h/', title: 't' }),
+      )
+    }
+  }
+})
+
+void test('preview: texts longer than the cap are left out of a preview', () => {
+  assert.equal(MAX_PREVIEW_TEXT_CHARS, 20_000)
 })

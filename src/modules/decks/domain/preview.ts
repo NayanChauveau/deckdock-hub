@@ -42,7 +42,7 @@ export const PREVIEW_NOTES = 5
  * notetype whose CSS or one of whose templates is longer (with its notes): never truncated, since
  * a cut template or stylesheet would render wrongly.
  */
-export const MAX_PREVIEW_TEXT_CHARS = 200_000
+export const MAX_PREVIEW_TEXT_CHARS = 20_000
 
 const get = (value: unknown, key: string): unknown =>
   typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
@@ -130,9 +130,96 @@ export function mediaName(raw: string): string | null {
 }
 
 // The format's reference patterns: src="X", src='X', src=X, [sound:X] and url(X), quotes optional.
+// `src` keeps a regular expression (its unquoted form needs no terminator, so it never rescans);
+// `[sound:…]` and `url(…)` are linear scanners, since their patterns rescanned the rest of the text
+// from every opening that is never closed (quadratic on a crafted stylesheet or field).
 const SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi
-const SOUND = /\[sound:([^\]]*)\]/g
-const URL_REF = /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi
+
+/** A reference found in a text: its whole span and the raw name, as written. */
+export interface Reference {
+  start: number
+  end: number
+  raw: string
+}
+
+const SOUND_OPEN = '[sound:'
+
+/** The `[sound:X]` tags of a text, as `/\[sound:([^\]]*)\]/g` matches them, in linear time. */
+export function soundReferences(text: string): Reference[] {
+  const found: Reference[] = []
+  let from = 0
+  for (;;) {
+    const start = text.indexOf(SOUND_OPEN, from)
+    if (start === -1) break
+    const close = text.indexOf(']', start + SOUND_OPEN.length)
+    // No `]` ahead: no later tag can be closed either.
+    if (close === -1) break
+    found.push({ start, end: close + 1, raw: text.slice(start + SOUND_OPEN.length, close) })
+    from = close + 1
+  }
+  return found
+}
+
+const isSpace = (char: string | undefined) => char !== undefined && /\s/.test(char)
+const isWordChar = (char: string | undefined) => char !== undefined && /\w/.test(char)
+const endsUnquoted = (char: string | undefined) =>
+  char === undefined || char === ')' || char === '"' || char === "'" || isSpace(char)
+
+/**
+ * The `url(X)` references of a stylesheet, as `/\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi`
+ * matches them, in linear time: an unquoted name's end, and whether `)` follows it, are remembered,
+ * so the many openings of one unclosed run share a single scan.
+ */
+export function urlReferences(text: string): Reference[] {
+  const found: Reference[] = []
+  const candidates = /url\(/gi
+  // [runFrom, runEnd) holds no character ending an unquoted name.
+  let runFrom = -1
+  let runEnd = -1
+  const unquotedEnd = (from: number): number => {
+    if (runFrom !== -1 && runFrom <= from && from <= runEnd) return runEnd
+    let at = from
+    while (!endsUnquoted(text[at])) at++
+    runFrom = from
+    runEnd = at
+    return at
+  }
+  // The position of `)` after optional spaces from a position, or -1; remembered per position.
+  const closings = new Map<number, number>()
+  const closingAfter = (from: number): number => {
+    const known = closings.get(from)
+    if (known !== undefined) return known
+    let at = from
+    while (isSpace(text[at])) at++
+    const result = text[at] === ')' ? at : -1
+    closings.set(from, result)
+    return result
+  }
+  for (let match = candidates.exec(text); match; match = candidates.exec(text)) {
+    const start = match.index
+    if (isWordChar(text[start - 1])) continue
+    let at = start + match[0].length
+    while (isSpace(text[at])) at++
+    const quote = text[at]
+    let raw: string | null = null
+    let close = -1
+    if (quote === '"' || quote === "'") {
+      const end = text.indexOf(quote, at + 1)
+      if (end !== -1) {
+        close = closingAfter(end + 1)
+        if (close !== -1) raw = text.slice(at + 1, end)
+      }
+    } else {
+      const end = unquotedEnd(at)
+      close = closingAfter(end)
+      if (close !== -1) raw = text.slice(at, end)
+    }
+    if (raw === null) continue
+    found.push({ start, end: close + 1, raw })
+    candidates.lastIndex = close + 1
+  }
+  return found
+}
 
 /** The media file names referred to in a text (HTML or CSS), in order, decoded. */
 export function mediaReferences(text: string): string[] {
@@ -142,8 +229,8 @@ export function mediaReferences(text: string): string[] {
     if (name !== null) names.push(name)
   }
   for (const match of text.matchAll(SRC)) add(match[1] ?? match[2] ?? match[3])
-  for (const match of text.matchAll(SOUND)) add(match[1])
-  for (const match of text.matchAll(URL_REF)) add(match[1] ?? match[2] ?? match[3])
+  for (const reference of soundReferences(text)) add(reference.raw)
+  for (const reference of urlReferences(text)) add(reference.raw)
   return names
 }
 

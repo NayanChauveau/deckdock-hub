@@ -397,10 +397,70 @@ try {
     assert.ok(Number(limited.retryAfter) > 0, String(limited.retryAfter))
   }
 
+  // Quotas (403): a pending deck receives at most 3 versions, an author stores at most 2 GiB.
+  {
+    const quinn = await author('quinn', 'limits')
+    const limits = (version: string) => deckJson({ id: 'limits', version })
+    for (const n of [1, 2, 3]) {
+      const answer = await publish(
+        'en',
+        await editionArchive(limits(`2026-11-26-q${n}`)),
+        quinn.token,
+      )
+      assert.equal(answer.status, 200, answer.text)
+      assert.equal(answer.json.status, 'pending_review')
+    }
+    const fourth = await publish('en', await editionArchive(limits('2026-11-26-q4')), quinn.token)
+    assert.equal(fourth.status, 403, fourth.text)
+    assert.equal(fourth.json.status, 'rejected')
+    assert.equal(fourth.json.errors[0]?.where, 'quota')
+    assert.match(present(fourth.json.errors[0]).message, /awaits approval/)
+    assert.equal((await versionsOf(quinn.deck.id)).length, 3)
+    // A re-run of a received version is still recognised.
+    const rerun = await publish('en', await editionArchive(limits('2026-11-26-q2')), quinn.token)
+    assert.equal(rerun.json.status, 'already_published', rerun.text)
+
+    // Approved, the deck publishes again until the author's stored bytes reach 2 GiB: another of
+    // the author's decks is given a version of nearly 2 GiB (its files counted, not on disk).
+    await payload.update({
+      collection: 'decks',
+      id: quinn.deck.id,
+      data: { status: 'approved' },
+      overrideAccess: true,
+    })
+    const other = await createDeck(payload, quinn.customerId, 'heavy')
+    const edition = await payload.create({
+      collection: 'editions',
+      data: { deck: other.deck.id, code: 'en' },
+      overrideAccess: true,
+    })
+    const huge = 2 * 1024 ** 3 - 1024
+    await payload.create({
+      collection: 'versions',
+      data: {
+        edition: edition.id,
+        version: '2026-11-26-h1',
+        receivedAt: new Date().toISOString(),
+        summary: { size: huge },
+        files: {
+          'deck.json': { sha256: sha256('h'), size: 1024 },
+          'media/big.bin': { sha256: sha256('b'), size: huge - 1024 },
+        },
+        deckJsonSha256: sha256('h'),
+      },
+      overrideAccess: true,
+    })
+    const over = await publish('en', await editionArchive(limits('2026-11-26-q5')), quinn.token)
+    assert.equal(over.status, 403, over.text)
+    assert.equal(over.json.errors[0]?.where, 'quota')
+    assert.match(present(over.json.errors[0]).message, /per author/)
+    assert.equal((await versionsOf(quinn.deck.id)).length, 3)
+  }
+
   // Every temporary directory is gone, success or refusal.
   assert.deepEqual(await readdir(`${dataDir}/tmp`), [])
   console.log(
-    'Publication : jetons, archives, vérificateur, versions, concurrence, 401/409/410/413/422.',
+    'Publication : jetons, archives, vérificateur, versions, concurrence, quotas, 401/403/409/410/413/422.',
   )
 } finally {
   await payload.destroy()

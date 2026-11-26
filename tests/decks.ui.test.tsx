@@ -91,13 +91,16 @@ void test('a new deck shows its token once, with Copy, then hides it for good', 
       locale="fr"
       create={async (deckId) => {
         created.push(deckId)
-        return deckId === 'verbs'
-          ? { ok: true, deckId, token: TOKEN }
-          : { ok: false, error: 'deck_exists' }
+        if (deckId === 'verbs') return { ok: true, deckId, token: TOKEN }
+        return { ok: false, error: deckId === 'eleventh' ? 'deck_limit' : 'deck_exists' }
       }}
     />,
   )
   const field = screen.getByLabelText(t.space.deckIdLabel)
+  fireEvent.change(field, { target: { value: 'eleventh' } })
+  fireEvent.click(screen.getByRole('button', { name: t.space.newSubmit }))
+  assert.ok(await screen.findByText(t.space.createErrors.deck_limit))
+  assert.match(t.space.createErrors.deck_limit, /10 decks/)
   fireEvent.change(field, { target: { value: 'kanji' } })
   fireEvent.click(screen.getByRole('button', { name: t.space.newSubmit }))
   assert.ok(await screen.findByText(t.space.createErrors.deck_exists))
@@ -118,7 +121,7 @@ void test('a new deck shows its token once, with Copy, then hides it for good', 
   fireEvent.click(screen.getByRole('button', { name: t.token.hide }))
   assert.equal(screen.queryByLabelText(t.token.label), null)
   assert.ok(!document.body.innerHTML.includes(TOKEN), 'the token is gone from the page')
-  assert.deepEqual(created, ['kanji', 'verbs'])
+  assert.deepEqual(created, ['eleventh', 'kanji', 'verbs'])
 })
 
 void test('regenerating and revoking a token ask for confirmation first', async () => {

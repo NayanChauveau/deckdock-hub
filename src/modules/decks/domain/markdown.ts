@@ -27,13 +27,23 @@ export const MAX_SUMMARY_SOURCE_CHARS = 2_000
 /** Marks nested deeper than this are kept as their text. */
 const MAX_DEPTH = 4
 
+/**
+ * The first `max` UTF-16 units of a text, one fewer when the last kept unit is a high surrogate:
+ * a cut never leaves half of a character (an emoji, a rare ideogram) at the end.
+ */
+function cut(text: string, max: number): string {
+  if (text.length <= max) return text
+  const last = text.charCodeAt(max - 1)
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max)
+}
+
 /** A description cut to `max` characters, and whether it was. */
 export function truncateDescription(
   source: string,
   max = MAX_DESCRIPTION_CHARS,
 ): { text: string; truncated: boolean } {
   return source.length > max
-    ? { text: source.slice(0, max), truncated: true }
+    ? { text: cut(source, max), truncated: true }
     : { text: source, truncated: false }
 }
 
@@ -224,7 +234,7 @@ const inlineText = (content: Inline[]): string =>
 
 /** The text of a Markdown description without its marks (lists, summaries, meta descriptions). */
 export function markdownText(markdown: string): string {
-  return parseMarkdown(markdown.slice(0, MAX_SUMMARY_SOURCE_CHARS))
+  return parseMarkdown(cut(markdown, MAX_SUMMARY_SOURCE_CHARS))
     .map((block) =>
       block.kind === 'codeblock'
         ? block.text

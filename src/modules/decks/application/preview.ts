@@ -1,4 +1,10 @@
-import { mediaName, type Note, type Notetype } from '../domain/preview'
+import {
+  mediaName,
+  soundReferences,
+  urlReferences,
+  type Note,
+  type Notetype,
+} from '../domain/preview'
 
 /**
  * Card previews: a "best effort" rendering of Anki's template syntax, not an exact copy of Anki.
@@ -40,18 +46,35 @@ type Node =
   | { kind: 'tag'; name: string; filters: string[] }
   | { kind: 'section'; name: string; inverted: boolean; children: Node[] }
 
+/**
+ * The `{{…}}` tags of a template, as `/\{\{([\s\S]*?)\}\}/g` matches them (each `{{` closed by the
+ * first `}}` after it), in linear time: that pattern rescanned the rest of the template from every
+ * `{{` never closed.
+ */
+function templateTags(template: string): { start: number; end: number; body: string }[] {
+  const tags: { start: number; end: number; body: string }[] = []
+  let from = 0
+  for (;;) {
+    const start = template.indexOf('{{', from)
+    if (start === -1) break
+    const close = template.indexOf('}}', start + 2)
+    if (close === -1) break
+    tags.push({ start, end: close + 2, body: template.slice(start + 2, close) })
+    from = close + 2
+  }
+  return tags
+}
+
 /** The template as a tree: unbalanced or stray closing tags are dropped, never an error. */
 function parseTemplate(template: string): Node[] {
   const root: Node[] = []
   const stack: { name: string; inverted: boolean; children: Node[] }[] = []
   const current = () => stack.at(-1)?.children ?? root
-  const pattern = /\{\{([\s\S]*?)\}\}/g
   let last = 0
-  for (const match of template.matchAll(pattern)) {
-    if (match.index > last)
-      current().push({ kind: 'text', text: template.slice(last, match.index) })
-    last = match.index + match[0].length
-    const body = (match[1] ?? '').trim()
+  for (const tag of templateTags(template)) {
+    if (tag.start > last) current().push({ kind: 'text', text: template.slice(last, tag.start) })
+    last = tag.end
+    const body = tag.body.trim()
     const sigil = body[0]
     if (sigil === '#' || sigil === '^') {
       stack.push({ name: body.slice(1).trim(), inverted: sigil === '^', children: [] })
@@ -83,20 +106,77 @@ function parseTemplate(template: string): Node[] {
 const EMPTY = /^(?:\s|<\/?(?:br|div)\s?\/?>)*$/i
 const isEmpty = (value: string) => EMPTY.test(value)
 
-const CLOZE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g
+interface Deletion {
+  start: number
+  end: number
+  number: number
+  text: string
+  hint: string | undefined
+}
+
+const isDigit = (code: number) => code >= 48 && code <= 57
+
+/**
+ * The cloze deletions of a field, as `/\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g` matches them,
+ * in linear time (that pattern was cubic on a run of `{{c1::`): `{{c`, digits, `::`, then the first
+ * `}}`; the hint is what follows the first `::` inside.
+ */
+function deletions(value: string): Deletion[] {
+  const found: Deletion[] = []
+  let from = 0
+  for (;;) {
+    const start = value.indexOf('{{c', from)
+    if (start === -1) break
+    let at = start + 3
+    while (at < value.length && isDigit(value.charCodeAt(at))) at++
+    if (at === start + 3 || !value.startsWith('::', at)) {
+      from = start + 1
+      continue
+    }
+    const close = value.indexOf('}}', at + 2)
+    // No `}}` ahead: no later deletion can be closed either.
+    if (close === -1) break
+    const inner = value.slice(at + 2, close)
+    const separator = inner.indexOf('::')
+    found.push({
+      start,
+      end: close + 2,
+      number: Number(value.slice(start + 3, at)),
+      text: separator === -1 ? inner : inner.slice(0, separator),
+      hint: separator === -1 ? undefined : inner.slice(separator + 2),
+    })
+    from = close + 2
+  }
+  return found
+}
+
+/** A text with each found span replaced. */
+function replaceSpans<T extends { start: number; end: number }>(
+  text: string,
+  spans: T[],
+  replace: (span: T) => string,
+): string {
+  let out = ''
+  let last = 0
+  for (const span of spans) {
+    out += text.slice(last, span.start) + replace(span)
+    last = span.end
+  }
+  return out + text.slice(last)
+}
 
 /** The lowest cloze number used in the fields, or 1. */
 function firstCloze(note: Note): number {
   let lowest = Infinity
   for (const value of Object.values(note.fields))
-    for (const match of value.matchAll(CLOZE)) lowest = Math.min(lowest, Number(match[1]))
+    for (const deletion of deletions(value)) lowest = Math.min(lowest, deletion.number)
   return Number.isFinite(lowest) ? lowest : 1
 }
 
 /** One cloze field: the active deletion masked on the front, revealed on the back. */
 function renderCloze(value: string, active: number, side: 'front' | 'back'): string {
-  return value.replace(CLOZE, (_all, n: string, text: string, hint: string | undefined) => {
-    if (Number(n) !== active) return text
+  return replaceSpans(value, deletions(value), ({ number, text, hint }) => {
+    if (number !== active) return text
     if (side === 'back') return `<span class="cloze">${text}</span>`
     return `<span class="cloze">[${hint ?? '...'}]</span>`
   })
@@ -144,33 +224,29 @@ const escapeAttribute = (value: string) =>
 
 /** `src` attributes and `[sound:…]` tags pointed at the hub; unknown files dropped. */
 function rewriteMedia(html: string, media: MediaURL): string {
-  return html
-    .replace(
-      /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi,
-      (all, a: string | undefined, b: string | undefined, c: string | undefined) => {
-        const raw = a ?? b ?? c ?? ''
-        const name = mediaName(raw)
-        if (name === null) return all
-        return `src="${escapeAttribute(media(name))}"`
-      },
-    )
-    .replace(/\[sound:([^\]]*)\]/g, (_all, raw: string) => {
+  const withSources = html.replace(
+    /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi,
+    (all, a: string | undefined, b: string | undefined, c: string | undefined) => {
+      const raw = a ?? b ?? c ?? ''
       const name = mediaName(raw)
-      const url = name === null ? '' : media(name)
-      return url ? `<audio controls src="${escapeAttribute(url)}"></audio>` : ''
-    })
+      if (name === null) return all
+      return `src="${escapeAttribute(media(name))}"`
+    },
+  )
+  return replaceSpans(withSources, soundReferences(withSources), ({ raw }) => {
+    const name = mediaName(raw)
+    const url = name === null ? '' : media(name)
+    return url ? `<audio controls src="${escapeAttribute(url)}"></audio>` : ''
+  })
 }
 
 /** `url(…)` of a stylesheet pointed at the hub; an unknown file becomes `url("")`. */
 function rewriteCssMedia(css: string, media: MediaURL): string {
-  return css.replace(
-    /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi,
-    (all, a: string | undefined, b: string | undefined, c: string | undefined) => {
-      const name = mediaName(a ?? b ?? c ?? '')
-      if (name === null) return all
-      return `url("${media(name).replace(/["\\\n]/g, '')}")`
-    },
-  )
+  return replaceSpans(css, urlReferences(css), ({ start, end, raw }) => {
+    const name = mediaName(raw)
+    if (name === null) return css.slice(start, end)
+    return `url("${media(name).replace(/["\\\n]/g, '')}")`
+  })
 }
 
 /**

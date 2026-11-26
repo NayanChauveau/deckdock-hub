@@ -1,4 +1,5 @@
 import type { DeckStatus } from './domain/status'
+import { MAX_DECKS_PER_AUTHOR } from './domain/quotas'
 import type { Failure } from './ui/results'
 
 const fr = {
@@ -40,6 +41,7 @@ const fr = {
       invalid_deck_id:
         'Cet identifiant n’est pas valable : lettres minuscules, chiffres et tirets, comme dans deck.json.',
       deck_exists: 'Vous avez déjà un deck avec cet identifiant.',
+      deck_limit: `Vous avez atteint la limite de ${MAX_DECKS_PER_AUTHOR} decks par auteur.`,
       no_handle: 'Choisissez d’abord votre pseudo.',
     },
     created: (deckId: string) =>
@@ -149,6 +151,7 @@ const en: DeckMessages = {
       invalid_deck_id:
         'This identifier is not valid: lowercase letters, digits and hyphens, as in deck.json.',
       deck_exists: 'You already have a deck with this identifier.',
+      deck_limit: `You have reached the limit of ${MAX_DECKS_PER_AUTHOR} decks per author.`,
       no_handle: 'Choose your handle first.',
     },
     created: (deckId: string) =>

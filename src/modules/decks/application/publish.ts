@@ -1,6 +1,7 @@
 import { deckFacts, isEditionCode, type DeckFacts } from '../domain/edition'
 import type { RecordId } from '../domain/model'
 import { previewOf, type DeckPreview } from '../domain/preview'
+import { MAX_AUTHOR_STORED_BYTES, MAX_PENDING_DECK_VERSIONS } from '../domain/quotas'
 import { searchText } from '../domain/search'
 import { findDeckByToken, recordTokenUse } from './decks'
 import type { DecksDeps } from './ports'
@@ -26,8 +27,11 @@ export interface NotetypeChange {
  * always last, whatever happened.
  */
 export interface EditionWorkspace {
-  /** Copies the request body into the workspace; more than the upload limit is `too_large`. */
-  receive(): Promise<'ok' | 'too_large'>
+  /**
+   * Copies the request body into the workspace; more than the upload limit is `too_large`, a body
+   * not received in time is `too_slow`.
+   */
+  receive(): Promise<'ok' | 'too_large' | 'too_slow'>
   /**
    * Safe extraction, then the layout of an edition: `deck.json` and `media/<file>`, nothing else.
    * `edition` is the one of the URL.
@@ -35,7 +39,7 @@ export interface EditionWorkspace {
   unpack(edition: string): Promise<PublishIssue[]>
   /** `deckdock check --non-strict` on the unpacked edition. */
   check(): Promise<PublishIssue[]>
-  /** The parsed `deck.json` (checked). */
+  /** The parsed `deck.json`, once `check` passed (it is not parsed before). */
   deckJson(): Promise<unknown>
   files(): Promise<FileMap>
   /** The notetype changes from the stored `deck.json` with this hash to the new one. */
@@ -95,6 +99,13 @@ export interface PublishStore {
    * checks ran).
    */
   record(version: NewVersion): Promise<'created' | 'exists' | 'stale'>
+  /** Versions the deck received, all editions together. */
+  versionCount(deck: RecordId): Promise<number>
+  /**
+   * Bytes stored for the author of the deck: the sizes of the files of every version of every
+   * deck of that author, each version counted with all its files.
+   */
+  authorStoredBytes(deck: RecordId): Promise<number>
 }
 
 export interface PublishDeps<Archive> {
@@ -125,7 +136,7 @@ export interface PublishBody {
 }
 
 export interface PublishResult {
-  httpStatus: 200 | 401 | 409 | 410 | 413 | 422 | 429 | 503
+  httpStatus: 200 | 401 | 403 | 408 | 409 | 410 | 413 | 422 | 429 | 503
   body: PublishBody
   /** Seconds, with 429 and 503. */
   retryAfter?: number
@@ -175,6 +186,28 @@ const versionTaken = (facts: DeckFacts, existing: StoredVersion, files: FileMap)
         facts,
       )
 
+const gib = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(2)} GiB`
+
+/** Why the author's quotas refuse a new version of `size` bytes, or `null`. */
+async function quotaRefusal(
+  store: PublishStore,
+  deck: { id: RecordId; status: string },
+  size: number,
+): Promise<PublishIssue | null> {
+  if (deck.status === 'pending' && (await store.versionCount(deck.id)) >= MAX_PENDING_DECK_VERSIONS)
+    return {
+      where: 'quota',
+      message: `This deck awaits approval and already has ${MAX_PENDING_DECK_VERSIONS} versions, the most a deck can receive before an administrator reviews it. Wait for the review, then publish again.`,
+    }
+  const stored = await store.authorStoredBytes(deck.id)
+  if (stored + size > MAX_AUTHOR_STORED_BYTES)
+    return {
+      where: 'quota',
+      message: `This version (${gib(size)}) would take your decks past the ${gib(MAX_AUTHOR_STORED_BYTES)} the hub stores per author (${gib(stored)} used). Make the deck smaller, or contact the hub's administrator.`,
+    }
+  return null
+}
+
 const breakingMessage = (change: NotetypeChange) =>
   `${change.detail}. A published notetype keeps its structure (fields can only be added at the end): create a new notetype, with a new id, for this change.`
 
@@ -215,10 +248,18 @@ export async function publishEdition<Archive>(
   let workspace: EditionWorkspace | null = null
   try {
     workspace = deps.workspace(input.archive)
-    // 3. Size of the upload.
-    if ((await workspace.receive()) === 'too_large')
+    // 3. Size of the upload, received in time.
+    const received = await workspace.receive()
+    if (received === 'too_large')
       return refused(413, [
         { where: 'archive', message: 'The archive is larger than the hub accepts.' },
+      ])
+    if (received === 'too_slow')
+      return refused(408, [
+        {
+          where: 'archive',
+          message: 'The upload took too long. Check the connection and re-run the workflow.',
+        },
       ])
     // 4. Safe extraction and layout.
     const unpacked = await workspace.unpack(input.edition)
@@ -283,6 +324,10 @@ export async function publishEdition<Archive>(
       const edition = await deps.store.edition(deck.id, input.edition)
       const existing = edition && (await deps.store.version(edition.id, facts.version))
       if (existing) return versionTaken(facts, existing, files)
+      // The author's quotas, before anything is stored. Two concurrent publishes may both pass
+      // at a limit (by one version at most per publish slot).
+      const quota = await quotaRefusal(deps.store, deck, summary.size)
+      if (quota) return refused(403, [quota], facts)
       // 9. Notetype structure against the latest version of the edition.
       const warnings: string[] = []
       if (edition?.latest) {

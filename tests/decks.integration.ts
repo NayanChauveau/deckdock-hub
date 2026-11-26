@@ -322,6 +322,12 @@ try {
     ['bob/verbs'],
   )
 
+  // At most 10 decks per author, counted by the database store (after the pending list above).
+  const prolific = await visitor()
+  await chooseHandle(payload, prolific.customerId, 'prolific')
+  for (let n = 1; n <= 10; n++) await createDeck(payload, prolific.customerId, `deck-${n}`)
+  assert.equal(await code(createDeck(payload, prolific.customerId, 'one-more')), 'deck_limit')
+
   // The review endpoints: verified administrators only (payload-totp is off in this run, so a
   // password session counts as verified, as for the rest of the admin here).
   const refused = await api(`/decks/${bobDeck.id}/approve`, { cookie: bob.cookie, method: 'POST' })

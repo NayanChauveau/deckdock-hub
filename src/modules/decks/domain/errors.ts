@@ -6,6 +6,7 @@ export type DecksErrorCode =
   | 'no_handle'
   | 'invalid_deck_id'
   | 'deck_exists'
+  | 'deck_limit'
   | 'not_found'
   | 'transition_refused'
   | 'reason_required'
