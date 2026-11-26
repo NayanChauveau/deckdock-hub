@@ -1,5 +1,6 @@
 import type { DeckId, Handle } from '../domain/handle'
-import type { Author, Deck, RecordId } from '../domain/model'
+import type { Author, Deck, EditionHistory, PendingDeck, RecordId } from '../domain/model'
+import type { DeckStatus } from '../domain/status'
 import type { TokenHasher } from '../domain/token'
 
 /**
@@ -18,6 +19,21 @@ export interface DecksStore {
   /** Looked up by the hash (an indexed equality), never by comparing tokens. */
   deckByTokenHash(tokenHash: string): Promise<Deck | null>
   touchToken(deck: RecordId, at: Date): Promise<void>
+  authorById(id: RecordId): Promise<Author | null>
+  deckById(id: RecordId): Promise<Deck | null>
+  /** The author's decks, by `deckId`. */
+  decksOfAuthor(authorId: RecordId): Promise<Deck[]>
+  /** Writes an administrator's review (status and reason). */
+  setReview(
+    deck: RecordId,
+    review: { status: DeckStatus; hiddenReason: string | null },
+  ): Promise<Deck>
+  /** Hides the deck with this reason and revokes its token, in one write. */
+  retire(deck: RecordId, reason: string): Promise<void>
+  /** The `pending` decks, oldest first. */
+  pendingDecks(): Promise<PendingDeck[]>
+  /** The deck's editions by code, each with its received versions, newest first. */
+  editionsOf(deck: RecordId): Promise<EditionHistory[]>
 }
 
 export interface DecksDeps {

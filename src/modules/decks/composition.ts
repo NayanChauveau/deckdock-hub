@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
-import type { Payload } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
 import { site } from '@/core/site'
 import { editionWorkspace, type Upload } from './adapters/files/workspace'
 import { windowRateLimiter } from './adapters/http/rate-limit'
@@ -17,9 +17,12 @@ import type { ServeDeps } from './application/serve'
 export const sha256Hex = (text: string): string =>
   createHash('sha256').update(text, 'utf8').digest('hex')
 
-/** The only place that ties the decks use cases to their adapters. */
-export const decksDeps = (payload: Payload): DecksDeps => ({
-  store: payloadDecksStore(payload),
+/**
+ * The only place that ties the decks use cases to their adapters. With `req`, the store joins that
+ * request's transaction (hooks and admin endpoints).
+ */
+export const decksDeps = (payload: Payload, req?: Partial<PayloadRequest>): DecksDeps => ({
+  store: payloadDecksStore(payload, req),
   random: (n) => new Uint8Array(randomBytes(n)),
   hash: sha256Hex,
   clock: () => new Date(),

@@ -4,11 +4,16 @@ import { makeSignature } from 'better-auth/crypto'
 import { getPayload, handleEndpoints } from 'payload'
 import config from '../src/payload.config'
 import { closeAuth, getAuth } from '../src/modules/accounts/server'
+import { deleteCustomer } from '../src/modules/accounts/adapters/payload/Customers'
 import {
+  ACCOUNT_DELETED_REASON,
+  approveDeck,
   chooseHandle,
   createDeck,
   deckForToken,
   DecksError,
+  hideDeck,
+  pendingDecks,
   regenerateToken,
   revokeToken,
 } from '../src/modules/decks/server'
@@ -282,7 +287,101 @@ try {
     (await payload.findByID({ collection: 'versions', id: version.id })).version,
     '2026.11.25+abc',
   )
+  // Review: hiding needs a reason, whoever writes it; a hidden deck may be restored.
+  await assert.rejects(
+    payload.update({
+      collection: 'decks',
+      id: aliceDeck.id,
+      data: { status: 'hidden' },
+      user: admin,
+      overrideAccess: false,
+    }),
+    /raison/,
+  )
+  assert.equal(await code(hideDeck(payload, aliceDeck.id, '  ')), 'reason_required')
+  const hidden = await hideDeck(payload, aliceDeck.id, '  Licence manquante ')
+  assert.equal(hidden.status, 'hidden')
+  assert.equal(hidden.hiddenReason, 'Licence manquante')
+  await assert.rejects(
+    payload.update({
+      collection: 'decks',
+      id: aliceDeck.id,
+      data: { hiddenReason: '' },
+      user: admin,
+      overrideAccess: false,
+    }),
+    /raison/,
+    'the reason of a hidden deck is not emptied',
+  )
+  const restored = await approveDeck(payload, aliceDeck.id)
+  assert.equal(restored.status, 'approved')
+  assert.equal(restored.hiddenReason, null)
+  assert.deepEqual(
+    (await pendingDecks(payload)).map((deck) => `${deck.handle}/${deck.deckId}`),
+    ['bob/verbs'],
+  )
+
+  // Account deletion (any path through Payload): decks hidden, tokens revoked, handle reserved.
+  const carol = await visitor()
+  await chooseHandle(payload, carol.customerId, 'carol')
+  const { deck: carolA, token: carolToken } = await createDeck(payload, carol.customerId, 'a')
+  const { deck: carolB } = await createDeck(payload, carol.customerId, 'b')
+  await approveDeck(payload, carolA.id)
+  const carolCustomer = await payload.findByID({ collection: 'customers', id: carol.customerId })
+  // The visitor's own deletion and the orphan sweep both remove the customer this way.
+  await deleteCustomer(payload, carolCustomer.authUserId)
+  for (const id of [carolA.id, carolB.id]) {
+    const deck = await payload.findByID({
+      collection: 'decks',
+      id,
+      depth: 0,
+      overrideAccess: true,
+      showHiddenFields: true,
+    })
+    assert.equal(deck.status, 'hidden', `deck ${String(id)} hidden`)
+    assert.equal(deck.hiddenReason, ACCOUNT_DELETED_REASON)
+    assert.equal(deck.tokenHash ?? null, null, 'token revoked')
+  }
+  assert.equal(await deckForToken(payload, carolToken), null)
+  const carolAuthor = await payload.find({
+    collection: 'authors',
+    where: { handle: { equals: 'carol' } },
+    depth: 0,
+  })
+  assert.equal(carolAuthor.docs.length, 1, 'the author entry stays')
+  assert.equal(carolAuthor.docs[0]?.customer ?? null, null, 'detached from the deleted customer')
+  const dave = await visitor()
+  assert.equal(await code(chooseHandle(payload, dave.customerId, 'carol')), 'handle_taken')
+  assert.equal(await code(approveDeck(payload, carolA.id)), 'account_deleted')
+  await assert.rejects(
+    payload.update({
+      collection: 'decks',
+      id: carolA.id,
+      data: { status: 'approved' },
+      user: admin,
+      overrideAccess: false,
+    }),
+    /supprimé/,
+    'not even through the admin form',
+  )
+  // An administrator deleting the customer from the admin: the same.
+  await chooseHandle(payload, dave.customerId, 'dave')
+  const { deck: daveDeck } = await createDeck(payload, dave.customerId, 'kanji')
+  await payload.delete({
+    collection: 'customers',
+    id: dave.customerId,
+    user: admin,
+    overrideAccess: false,
+  })
+  const daveAfter = await payload.findByID({ collection: 'decks', id: daveDeck.id, depth: 0 })
+  assert.equal(daveAfter.status, 'hidden')
+  assert.equal(daveAfter.hiddenReason, ACCOUNT_DELETED_REASON)
+  // A customer without a handle is deleted as before.
+  const erin = await visitor()
+  await payload.delete({ collection: 'customers', id: erin.customerId, overrideAccess: true })
+
   console.log('Decks : pseudos et decks uniques, jetons, accès des visiteurs, versions immuables.')
+  console.log('Decks : relecture (raison obligatoire) et suppression de compte (decks masqués).')
 } finally {
   await closeAuth()
   await payload.destroy()

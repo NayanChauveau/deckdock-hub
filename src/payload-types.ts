@@ -264,6 +264,9 @@ export interface Deck {
   deckId: string;
   status: 'pending' | 'approved' | 'hidden';
   approvedAt?: string | null;
+  /**
+   * Obligatoire pour masquer un deck. Visible par son auteur.
+   */
   hiddenReason?: string | null;
   tokenHash?: string | null;
   tokenLastUsedAt?: string | null;

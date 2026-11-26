@@ -125,6 +125,7 @@
         "tests/decks.http.ts",
         "tests/decks.integration.ts",
         "tests/decks.publish.test.ts",
+        "tests/decks.review.test.ts",
         "tests/decks.serve.http.ts",
         "tests/decks.serve.test.ts",
         "tests/decks.workspace.test.ts",

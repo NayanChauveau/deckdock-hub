@@ -1,8 +1,8 @@
-import { ValidationError, type Payload, type Where } from 'payload'
+import { ValidationError, type Payload, type PayloadRequest, type Where } from 'payload'
 import type { DecksStore } from '../../application/ports'
 import { DecksError } from '../../domain/errors'
 import type { DeckId, Handle } from '../../domain/handle'
-import type { Author, Deck } from '../../domain/model'
+import type { Author, Deck, EditionHistory, PendingDeck } from '../../domain/model'
 import { isDeckStatus } from '../../domain/status'
 
 const get = (doc: unknown, key: string): unknown => Reflect.get(Object(doc), key)
@@ -38,9 +38,15 @@ function toDeck(doc: unknown): Deck {
   }
 }
 
-/** The decks store on Payload's Local API. Every call is the system's: access is overridden. */
-export function payloadDecksStore(payload: Payload): DecksStore {
-  const system = { overrideAccess: true, depth: 0 } as const
+const numberOf = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+
+/**
+ * The decks store on Payload's Local API. Every call is the system's: access is overridden. With
+ * `req`, every call joins that request's transaction (a hook on another collection's deletion).
+ */
+export function payloadDecksStore(payload: Payload, req?: Partial<PayloadRequest>): DecksStore {
+  const system = { overrideAccess: true, depth: 0, ...(req ? { req } : {}) } as const
   const findOne = async (collection: 'authors' | 'decks', where: Where) =>
     (await payload.find({ collection, where, limit: 1, pagination: false, ...system })).docs[0] ??
     null
@@ -107,6 +113,109 @@ export function payloadDecksStore(payload: Payload): DecksStore {
         data: { tokenLastUsedAt: at.toISOString() },
         ...system,
       })
+    },
+    async authorById(id) {
+      const doc = await findOne('authors', { id: { equals: id } })
+      return doc ? toAuthor(doc) : null
+    },
+    async deckById(id) {
+      const doc = await findOne('decks', { id: { equals: id } })
+      return doc ? toDeck(doc) : null
+    },
+    async decksOfAuthor(authorId) {
+      const { docs } = await payload.find({
+        collection: 'decks',
+        where: { author: { equals: authorId } },
+        sort: 'deckId',
+        pagination: false,
+        ...system,
+      })
+      return docs.map(toDeck)
+    },
+    async setReview(deck, review) {
+      // The `decks` hook checks the review again and records the approval date.
+      return toDeck(
+        await payload.update({ collection: 'decks', id: deck, data: review, ...system }),
+      )
+    },
+    async retire(deck, reason) {
+      await payload.update({
+        collection: 'decks',
+        id: deck,
+        data: { status: 'hidden', hiddenReason: reason, tokenHash: null },
+        ...system,
+      })
+    },
+    async pendingDecks() {
+      const { docs } = await payload.find({
+        collection: 'decks',
+        where: { status: { equals: 'pending' } },
+        sort: 'createdAt',
+        pagination: false,
+        select: { deckId: true, author: true, createdAt: true },
+        ...system,
+      })
+      const authorIds = [...new Set(docs.map((doc) => idOf(get(doc, 'author'))))].filter(
+        (id): id is number => id !== null,
+      )
+      const authors = authorIds.length
+        ? (
+            await payload.find({
+              collection: 'authors',
+              where: { id: { in: authorIds } },
+              pagination: false,
+              select: { handle: true },
+              ...system,
+            })
+          ).docs
+        : []
+      const handles = new Map(authors.map((author) => [author.id, author.handle]))
+      return docs.flatMap((doc): PendingDeck[] => {
+        const handle = handles.get(Number(idOf(get(doc, 'author'))))
+        return handle
+          ? [
+              {
+                id: doc.id,
+                deckId: String(get(doc, 'deckId')) as DeckId,
+                handle: handle as Handle,
+                createdAt: new Date(String(get(doc, 'createdAt'))),
+              },
+            ]
+          : []
+      })
+    },
+    async editionsOf(deck) {
+      const editions = (
+        await payload.find({
+          collection: 'editions',
+          where: { deck: { equals: deck } },
+          sort: 'code',
+          pagination: false,
+          select: { code: true },
+          ...system,
+        })
+      ).docs
+      if (!editions.length) return []
+      const versions = (
+        await payload.find({
+          collection: 'versions',
+          where: { edition: { in: editions.map((edition) => edition.id) } },
+          sort: '-receivedAt',
+          pagination: false,
+          select: { edition: true, version: true, receivedAt: true, summary: true },
+          ...system,
+        })
+      ).docs
+      return editions.map((edition): EditionHistory => ({
+        code: edition.code,
+        versions: versions
+          .filter((version) => idOf(get(version, 'edition')) === edition.id)
+          .map((version) => ({
+            version: String(get(version, 'version')),
+            receivedAt: new Date(String(get(version, 'receivedAt'))),
+            notes: numberOf(get(get(version, 'summary'), 'notes')),
+          })),
+      }))
     },
   }
   return store

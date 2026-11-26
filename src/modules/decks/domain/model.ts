@@ -16,3 +16,17 @@ export type Deck = Readonly<{
   hiddenReason: string | null
   tokenLastUsedAt: Date | null
 }>
+
+/** A deck awaiting an administrator's review, as the admin lists it. */
+export type PendingDeck = Readonly<{
+  id: RecordId
+  deckId: DeckId
+  handle: Handle
+  createdAt: Date
+}>
+
+/** One version received for an edition, as its author sees it. */
+export type ReceivedVersion = Readonly<{ version: string; receivedAt: Date; notes: number }>
+
+/** An edition of a deck and the versions received for it, newest first. */
+export type EditionHistory = Readonly<{ code: string; versions: readonly ReceivedVersion[] }>
