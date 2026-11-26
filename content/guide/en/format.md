@@ -113,14 +113,19 @@ Each publication creates a **version** of each edition. The template’s CI name
 
 ## What breaks compatibility
 
-Learners already have your notes and their types in their Anki collection, with their progress. Some changes go through without trouble, others don’t:
+Learners already have your notes and their types in their Anki collection, with their progress. A **note type** (*notetype*) is a note’s Anki model: its **fields** (for example `Front` and `Back`), its **card types** (one card to review per card type, such as front-to-back and back-to-front) and its **kind** (`kind`: standard or cloze). In the template, the four note types (`basic`, `reversed`, `cloze`, `mcq`) are defined by the compiler, in `compiler/notetypes.py`: you only touch them if you change that compiler or write your own.
 
 | Change | Effect for learners |
 | --- | --- |
-| Note text, tags, adding or removing notes, card layout and style | Applied normally, progress kept. |
-| Adding a field **at the end** of a note type | Accepted with a warning: learners will need a full sync with AnkiWeb. Avoid it if you can. |
-| Removing, renaming or reordering fields, adding or removing a card side, switching between `basic` and `cloze` | **Refused** by the site, to protect learners. Create a new note type for new notes instead. |
+| Note text, tags, adding or removing notes | Applied normally, progress kept. |
+| Card type text (layout) and CSS of a note type | Applied normally, progress kept. |
+| Adding a field **at the end** of a published note type | Accepted with a warning: learners will need a full sync with AnkiWeb. Avoid it if you can. |
+| Removing, renaming or reordering fields, adding or removing a card type, changing the `kind` of a published note type | **Refused** by the site (409), to protect learners. Create a new note type (a new note type `id`) for new notes instead. |
 | Changing the deck’s `id`, an edition code or a note’s `id` | Never do this: Anki would see new notes, and learners would lose the progress of the old ones. |
+
+### Changing a published note’s type
+
+In the template, each `type` value is its own note type: switching a note from `basic` to `cloze` moves it to another note type, without changing the structure of any type. The site therefore does not refuse it. The safe way to do it is still to **create a new note**, with a new `id` and the right `type`, then delete the old one: the new note starts without review history.
 
 > **Warning**
 > Never rename an `id` that is already published, not even to fix a typo. To remove a note, delete it; to replace it, create a new one with a new `id`.

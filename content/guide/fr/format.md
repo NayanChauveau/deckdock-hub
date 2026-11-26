@@ -113,14 +113,19 @@ Chaque publication crée une **version** de chaque édition. La CI du modèle lu
 
 ## Ce qui casse la compatibilité
 
-Les apprenants ont déjà vos notes et leurs types dans leur collection Anki, avec leur progression. Certaines modifications passent sans souci, d’autres non :
+Les apprenants ont déjà vos notes et leurs types dans leur collection Anki, avec leur progression. Un **type de note** (*notetype*) est le modèle Anki d’une note : ses **champs** (par exemple `Front` et `Back`), ses **modèles de carte** (une carte à réviser par modèle, comme le recto-verso et le verso-recto) et sa **nature** (`kind` : standard ou texte à trous). Avec le modèle, les quatre types de notes (`basic`, `reversed`, `cloze`, `mcq`) sont définis par le compilateur, dans `compiler/notetypes.py` : vous n’y touchez que si vous modifiez ce compilateur ou écrivez le vôtre.
 
 | Modification | Effet chez les apprenants |
 | --- | --- |
-| Texte des notes, étiquettes, ajout ou retrait de notes, mise en page et style des cartes | Appliqué normalement, progression conservée. |
-| Ajout d’un champ **à la fin** d’un type de note | Accepté avec un avertissement : les apprenants devront faire une synchronisation complète avec AnkiWeb. À éviter si possible. |
-| Retrait, renommage ou réordonnancement des champs, ajout ou retrait d’une face, passage de `basic` à `cloze` | **Refusé** par le site, pour protéger les apprenants. Créez plutôt un nouveau type de note pour les nouvelles notes. |
+| Texte des notes, étiquettes, ajout ou retrait de notes | Appliqué normalement, progression conservée. |
+| Texte des modèles de carte (mise en page) et CSS d’un type de note | Appliqué normalement, progression conservée. |
+| Ajout d’un champ **à la fin** d’un type de note publié | Accepté avec un avertissement : les apprenants devront faire une synchronisation complète avec AnkiWeb. À éviter si possible. |
+| Retrait, renommage ou réordonnancement des champs, ajout ou retrait d’un modèle de carte, changement de nature (`kind`) d’un type de note publié | **Refusé** par le site (409), pour protéger les apprenants. Créez plutôt un nouveau type de note (un nouvel `id` de type de note) pour les nouvelles notes. |
 | Changement de l’`id` du deck, d’un code d’édition ou de l’`id` d’une note | À ne jamais faire : Anki y verrait de nouvelles notes, et les apprenants perdraient la progression des anciennes. |
+
+### Changer le type d’une note publiée
+
+Dans le modèle, chaque valeur de `type` correspond à son propre type de note : passer une note de `basic` à `cloze` la déplace vers un autre type de note, sans modifier la structure d’aucun type. Le site ne le refuse donc pas. La façon sûre de le faire reste de **créer une nouvelle note**, avec un nouvel `id` et le bon `type`, puis de supprimer l’ancienne : la nouvelle note repart sans historique de révision.
 
 > **Attention**
 > Ne renommez jamais un `id` déjà publié, même pour corriger une faute de frappe. Pour retirer une note, supprimez-la ; pour la remplacer, créez-en une nouvelle avec un nouvel `id`.

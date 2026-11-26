@@ -196,4 +196,4 @@ Les causes les plus fréquentes :
 Une erreur à l’étape *Publish to DeckDock hub* vient de ce site ; le tableau des réponses possibles est dans [Publier sans GitHub](/fr/guide/publier-sans-github#les-reponses-du-hub).
 
 > **Note**
-> Une modification de la structure d’un type de note déjà publié (retirer, renommer ou réordonner ses champs) est refusée, pour protéger la progression des apprenants. Avec les types de notes du modèle, cela n’arrive pas. Voir [Le format en détail](/fr/guide/format#ce-qui-casse-la-compatibilite).
+> Une modification de la structure d’un type de note déjà publié (retirer, renommer ou réordonner ses champs) est refusée, pour protéger la progression des apprenants. Cela ne concerne que ceux qui modifient les types de notes du compilateur (`compiler/notetypes.py`) : écrire vos notes ou changer leur `type` ne touche pas à cette structure. Voir [Le format en détail](/fr/guide/format#ce-qui-casse-la-compatibilite).

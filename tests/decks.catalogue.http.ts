@@ -259,7 +259,7 @@ try {
       'en address on its tab',
     )
     assert.ok(html.includes('Outils › DeckDock › Ajouter'))
-    assert.ok(html.includes('href="https://github.com/NayanChauveau/anki-deck-manager"'))
+    assert.ok(html.includes('href="https://github.com/NayanChauveau/deckdock/tree/main/addon"'))
     // « En bref »: the https homepage as « Source ».
     assert.ok(html.includes('En bref'))
     assert.ok(html.includes('href="https://example.test/verbes"'), 'Source link')

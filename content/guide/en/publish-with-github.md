@@ -196,4 +196,4 @@ The most common causes:
 An error in the *Publish to DeckDock hub* step comes from this site; the table of possible answers is in [Publish without GitHub](/en/guide/publish-without-github#the-hub-s-answers).
 
 > **Note**
-> Changing the structure of a note type that is already published (removing, renaming or reordering its fields) is refused, to protect learners’ progress. With the template’s note types, this doesn’t happen. See [The format in detail](/en/guide/format#what-breaks-compatibility).
+> Changing the structure of a note type that is already published (removing, renaming or reordering its fields) is refused, to protect learners’ progress. This only concerns people who change the compiler’s note types (`compiler/notetypes.py`): writing your notes or changing their `type` does not touch that structure. See [The format in detail](/en/guide/format#what-breaks-compatibility).

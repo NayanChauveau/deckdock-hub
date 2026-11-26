@@ -12,7 +12,7 @@ import { Markdown } from './Markdown'
 import { PreviewCarousel } from './PreviewCarousel'
 
 /** The Anki add-on « DeckDock »: its page, until it has an AnkiWeb id. */
-export const ADDON_URL = 'https://github.com/NayanChauveau/anki-deck-manager'
+export const ADDON_URL = 'https://github.com/NayanChauveau/deckdock/tree/main/addon'
 
 type Found = Extract<DeckPageResult, { kind: 'found' }>
 

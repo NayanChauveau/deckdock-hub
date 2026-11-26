@@ -26,7 +26,7 @@ Un fichier `.apkg` est une photo figée : si vous corrigez une erreur, il faut r
 
 ## Ce que reçoivent les apprenants
 
-L’apprenant installe une fois le [plugin DeckDock](https://github.com/NayanChauveau/anki-deck-manager) dans Anki. Ensuite :
+L’apprenant installe une fois le [plugin DeckDock](https://github.com/NayanChauveau/deckdock/tree/main/addon) dans Anki (une page d’installation en un clic arrive bientôt). Ensuite :
 
 1. il trouve votre deck dans le catalogue de ce site et copie l’adresse de l’édition qui l’intéresse ;
 2. dans Anki, il ouvre **Outils › DeckDock**, clique sur **Ajouter** et colle l’adresse ;

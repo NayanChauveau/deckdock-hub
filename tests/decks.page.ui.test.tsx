@@ -100,7 +100,7 @@ void test('follow block: a tab per edition, the address to copy, how to add it, 
   assert.ok(within(follow).getByText(t.followHow))
   const install = within(follow).getByRole('link', { name: new RegExp(t.installAddon) })
   assert.equal(install.getAttribute('href'), ADDON_URL)
-  assert.equal(ADDON_URL, 'https://github.com/NayanChauveau/anki-deck-manager')
+  assert.equal(ADDON_URL, 'https://github.com/NayanChauveau/deckdock/tree/main/addon')
 })
 
 void test('facts: notes, languages, licence, Source for an https homepage only', () => {

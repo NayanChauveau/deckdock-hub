@@ -193,7 +193,7 @@ test('page de deck en français : suivre dans Anki, aperçu en carrousel isolé,
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(address)
   await expect(follow.getByRole('link', { name: new RegExp(t.installAddon) })).toHaveAttribute(
     'href',
-    'https://github.com/NayanChauveau/anki-deck-manager',
+    'https://github.com/NayanChauveau/deckdock/tree/main/addon',
   )
   // « En bref »: notes, languages, licence and the https homepage as « Source ».
   const facts = page.getByRole('region', { name: t.facts })

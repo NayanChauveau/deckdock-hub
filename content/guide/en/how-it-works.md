@@ -26,7 +26,7 @@ An `.apkg` file is a frozen snapshot: if you fix a mistake, you have to send the
 
 ## What learners get
 
-The learner installs the [DeckDock add-on](https://github.com/NayanChauveau/anki-deck-manager) in Anki once. Then:
+The learner installs the [DeckDock add-on](https://github.com/NayanChauveau/deckdock/tree/main/addon) in Anki once (a one-click install page is coming soon). Then:
 
 1. they find your deck in this site’s catalogue and copy the address of the edition they want;
 2. in Anki, they open **Tools › DeckDock**, click **Add** and paste the address;
