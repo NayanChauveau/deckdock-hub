@@ -1,41 +1,45 @@
-/* Semantic tokens of the public site, light by default. `.dark` on <html> (src/core/ui/theme)
-   redefines every colour; tests/theme-contrast.test.ts checks both themes. A site changes its look
-   here, in both blocks. */
+/* Semantic tokens of the public site: the DeckDock palette (indigo accent, soft violet-tinted page),
+   light by default. `.dark` on <html> (src/core/ui/theme) redefines every colour;
+   tests/theme-contrast.test.ts checks both themes. */
 :root {
   color-scheme: light;
-  --background: #f6f3ed;
-  --foreground: #292d29;
-  --card: #fffdf8;
+  --background: #fbfaff;
+  --foreground: #1b1a2e;
+  --card: #ffffff;
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
-  --primary: #34492f;
+  --primary: #4f46e5;
   --primary-foreground: #ffffff;
-  --secondary: #eaece3;
+  --secondary: #eef0ff;
   --secondary-foreground: var(--foreground);
-  --muted: #e9e5dc;
-  --muted-foreground: #555e50;
-  --accent: #ede8df;
+  --muted: #efeef8;
+  --muted-foreground: #5b5a72;
+  --accent: #e0e7ff;
   --accent-foreground: var(--foreground);
-  --destructive: #9b2920;
-  --border: #d8d7ce;
-  --input: #b0b2a6;
-  --ring: #937440;
-  --brand: #7e302d;
-  --selection: #dfcbc2;
-  --border-strong: #c5c9bc;
-  --art-border: #ded9ce;
-  --art-paper: #fffcf6;
-  --art-edge: #eee9de;
-  --art-stroke: #a0a28d;
-  --art-shadow-stroke: #b6b8a5;
-  --art-signature: #7a6c56; /* 4.5:1 minimum on --art-paper (WCAG AA) */
-  --radius: 0.375rem;
-  --font-body: Arial, Helvetica, sans-serif;
-  --font-display: Georgia, 'Times New Roman', serif;
+  --destructive: #b91c1c;
+  --border: #e4e2f3;
+  --input: #6f6d92;
+  --ring: #4f46e5;
+  --brand: #4f46e5;
+  --selection: #d9dcff;
+  --border-strong: #7a789a;
+  --gradient-from: #4f46e5;
+  --gradient-to: #db2777;
+  --shadow-card: 0 4px 14px #4f46e514;
+  --art-border: #e4e2f3;
+  --art-paper: #ffffff;
+  --art-edge: #eef0ff;
+  --art-stroke: #a5a3c4;
+  --art-shadow-stroke: #c4c2dc;
+  --art-signature: #6f6d92; /* 4.5:1 minimum on --art-paper (WCAG AA) */
+  --radius: 0.875rem;
+  --font-body:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-body);
   --font-sans: var(--font-body);
   --font-serif: var(--font-display);
-  --shadow-art: 7px 12px 24px #292d290d;
+  --shadow-art: var(--shadow-card);
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -45,37 +49,41 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
   --chart-1: var(--primary);
-  --chart-2: var(--brand);
+  --chart-2: #db2777;
   --chart-3: var(--muted-foreground);
-  --chart-4: var(--ring);
+  --chart-4: #0e7490;
   --chart-5: var(--foreground);
 }
 
 .dark {
   color-scheme: dark;
-  --background: #191b18;
-  --foreground: #e8e6df;
-  --card: #22251f;
-  --primary: #a7c49c;
-  --primary-foreground: #172014;
-  --secondary: #2c3029;
-  --muted: #2a2e27;
-  --muted-foreground: #a9ae9f;
-  --accent: #2e322b;
-  --destructive: #f08a7e;
-  --border: #363a32;
-  --input: #7c8273;
-  --ring: #c9a468;
-  --brand: #e8a097;
-  --selection: #4d3b36;
-  --border-strong: #5d6357;
-  --art-border: #3a3e36;
-  --art-paper: #262a23;
-  --art-edge: #30342c;
-  --art-stroke: #858a76;
-  --art-shadow-stroke: #6c715f;
-  --art-signature: #c2b393; /* 4.5:1 minimum on --art-paper (WCAG AA) */
-  --shadow-art: 7px 12px 24px #00000040;
+  --background: #0f0e1a;
+  --foreground: #ecebf7;
+  --card: #17162a;
+  --primary: #5c5ff0; /* #6366f1 is 4.47:1 with white: nudged to pass AA */
+  --primary-foreground: #ffffff;
+  --secondary: #1e1b4b;
+  --muted: #1c1b30;
+  --muted-foreground: #a3a1bd;
+  --accent: #26245a;
+  --destructive: #f87171;
+  --border: #2a2840;
+  --input: #8b8aa8;
+  --ring: #6366f1;
+  --brand: #a5b4fc;
+  --selection: #3b3a7a;
+  --border-strong: #6f6d92;
+  --gradient-from: #818cf8;
+  --gradient-to: #f472b6;
+  --shadow-card: 0 0 0 1px #24223a;
+  --art-border: #24223a;
+  --art-paper: #17162a;
+  --art-edge: #1e1b4b;
+  --art-stroke: #6f6d92;
+  --art-shadow-stroke: #4a4868;
+  --art-signature: #a3a1bd; /* 4.5:1 minimum on --art-paper (WCAG AA) */
+  --chart-2: #f472b6;
+  --chart-4: #22d3ee;
 }
 
 @theme inline {

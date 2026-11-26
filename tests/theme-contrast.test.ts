@@ -48,19 +48,59 @@ const textPairs = [
   ['foreground', 'background'],
   ['muted-foreground', 'background'],
   ['card-foreground', 'card'],
+  ['muted-foreground', 'card'],
+  ['popover-foreground', 'popover'],
   ['primary-foreground', 'primary'],
+  ['secondary-foreground', 'secondary'],
   ['muted-foreground', 'muted'],
+  ['accent-foreground', 'accent'],
   ['destructive', 'background'],
+  ['destructive', 'card'],
   ['brand', 'background'],
+  ['brand', 'card'],
   ['art-signature', 'art-paper'],
 ]
-/** The focus ring needs 3:1. Field and strong borders are below 3:1 in the (unchanged) light theme,
- *  so the dark theme must simply not be worse than the light one. */
-const focusPair = ['ring', 'background'] as const
-const borderPairs = [
+/** Non-text contrast (WCAG 1.4.11): the focus ring, field borders and strong borders need 3:1
+ *  against the page in both themes. */
+const nonTextPairs = [
+  ['ring', 'background'],
   ['input', 'background'],
+  ['input', 'card'],
   ['border-strong', 'background'],
-]
+] as const
+
+/** The DeckDock palette (spec 2026-11-26-refonte-ux). `brand` is the indigo accent used as text:
+ *  #6366f1 is only 4.28:1 on the dark background, so dark text uses its lighter tint. `primary` is the
+ *  button fill: the dark one is nudged from #6366f1 (white on it is 4.47:1) to pass AA with white. */
+const expected = {
+  light: {
+    primary: '#4f46e5',
+    background: '#fbfaff',
+    brand: '#4f46e5',
+    'gradient-from': '#4f46e5',
+    'gradient-to': '#db2777',
+  },
+  dark: {
+    ring: '#6366f1',
+    background: '#0f0e1a',
+    'gradient-from': '#818cf8',
+    'gradient-to': '#f472b6',
+  },
+} as const
+
+void test('the palette is the DeckDock one', () => {
+  for (const [name, tokens] of [
+    ['light', light],
+    ['dark', dark],
+  ] as const) {
+    for (const [token, value] of Object.entries(expected[name])) {
+      assert.equal(resolve(tokens, token).toLowerCase(), value, `${name} --${token}`)
+    }
+    assert.ok(tokens.get('--shadow-card'), `${name} --shadow-card`)
+  }
+  assert.match(css, /--radius:\s*0\.875rem/)
+  assert.ok(!/@import|url\(/.test(css), 'no external font or asset in theme.css')
+})
 
 void test('every colour token of :root has its own value in .dark', () => {
   const darkOwn = block('.dark')
@@ -81,15 +121,10 @@ void test('AA contrast in the light and the dark theme', () => {
       const ratio = contrast(tokens, front, back)
       assert.ok(ratio >= 4.5, `${name}: ${front} on ${back} is ${ratio.toFixed(2)}:1, below 4.5:1`)
     }
-    const focus = contrast(tokens, ...focusPair)
-    assert.ok(focus >= 3, `${name}: ring on background is ${focus.toFixed(2)}:1, below 3:1`)
-  }
-  for (const [front = '', back = ''] of borderPairs) {
-    const [ofLight, ofDark] = [contrast(light, front, back), contrast(dark, front, back)]
-    assert.ok(
-      ofDark >= ofLight,
-      `dark ${front} on ${back} (${ofDark.toFixed(2)}:1) is worse than light (${ofLight.toFixed(2)}:1)`,
-    )
+    for (const [front, back] of nonTextPairs) {
+      const ratio = contrast(tokens, front, back)
+      assert.ok(ratio >= 3, `${name}: ${front} on ${back} is ${ratio.toFixed(2)}:1, below 3:1`)
+    }
   }
 })
 
