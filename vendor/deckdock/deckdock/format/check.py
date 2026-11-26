@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import cast, final
 
+from deckdock.format.emoji import is_single_emoji
 from deckdock.issues import Issue
 
 FORMAT = "deckdock/1"
@@ -33,6 +34,7 @@ _DECK_OPTIONAL = (
     "anki_id",
     "options",
     "description",
+    "icon",
     "homepage",
     "license",
     "generator",
@@ -187,6 +189,9 @@ class _Checker:
             "generator",
         ):
             _ = self.string(deck, key, "deck")
+        icon = self.string(deck, "icon", "deck")
+        if icon is not None and not is_single_emoji(icon):
+            self.error("deck.icon", "must be a single emoji")
         if "language" in deck:
             language = deck["language"]
             if not _is_str_list(language) or not language:
