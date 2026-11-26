@@ -10,6 +10,12 @@ function watchCsp(page: Page) {
   const seen: string[] = []
   cspViolations.set(page, seen)
   page.on('console', (message) => {
+    // A card preview's own policy refuses the author's scripts by design (decks module,
+    // preview-route.ts): its document runs in a sandbox, not in the site's pages.
+    if (
+      new URL(message.location().url || 'about:blank', page.url()).pathname.startsWith('/preview/')
+    )
+      return
     if (message.type() === 'error' && /Content Security Policy/i.test(message.text()))
       seen.push(`${page.url()}: ${message.text()}`)
   })

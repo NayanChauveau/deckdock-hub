@@ -1,13 +1,15 @@
 import type { Payload } from 'payload'
 import type { Upload } from './adapters/files/workspace'
 import * as authorSpaceUseCases from './application/author-space'
+import * as catalogueUseCases from './application/catalogue'
+import type { CataloguePage, DeckPageResult, PreviewResult, Viewer } from './application/catalogue'
 import * as useCases from './application/decks'
 import * as reviewUseCases from './application/review'
 import * as publishUseCase from './application/publish'
 import type { PublishResult } from './application/publish'
 import * as serveUseCase from './application/serve'
 import type { ServeRequest, ServeResult } from './application/serve'
-import { decksDeps, publishDeps, serveDeps } from './composition'
+import { catalogueDeps, decksDeps, publishDeps, serveDeps } from './composition'
 import type { Author, Deck, EditionHistory, PendingDeck, RecordId } from './domain/model'
 
 export { DecksError, type DecksErrorCode } from './domain/errors'
@@ -23,7 +25,15 @@ export type { DeckStatus } from './domain/status'
 export { ACCOUNT_DELETED_REASON } from './domain/review'
 export type { PublishBody, PublishResult } from './application/publish'
 export type { ServeRequest, ServeResult } from './application/serve'
-export { editionAddress, servePath } from './domain/serving'
+export { deckPagePath, editionAddress, previewPath, servePath } from './domain/serving'
+export type {
+  CatalogueCard,
+  CataloguePage,
+  DeckPageResult,
+  PreviewResult,
+  PublicEdition,
+  Viewer,
+} from './application/catalogue'
 
 /** The decks use cases bound to the site's adapters, for routes, pages and hooks. */
 export const chooseHandle = (
@@ -81,3 +91,43 @@ export const publishEdition = (
 /** Resolves a public `/d/<handle>/<deck-id>/<path>` request (index.json, deck.json, media). */
 export const serveDeckFile = (payload: Payload, request: ServeRequest): Promise<ServeResult> =>
   serveUseCase.serveDeckFile(serveDeps(payload), request)
+
+/** `/{locale}/decks?q=&lang=&page=`: approved decks, 20 per page. */
+export const catalogue = (
+  payload: Payload,
+  input: {
+    q: string | undefined
+    lang: string | undefined
+    page: string | undefined
+    locale: string
+  },
+): Promise<CataloguePage> => catalogueUseCases.catalogue(catalogueDeps(payload), input)
+
+/** `/{locale}/d/<handle>/<deck-id>?edition=`: pending for its author only, hidden is gone. */
+export const deckPage = (
+  payload: Payload,
+  input: {
+    handle: string
+    deckId: string
+    edition: string | undefined
+    locale: string
+    viewer: Viewer
+  },
+): Promise<DeckPageResult> => catalogueUseCases.deckPage(catalogueDeps(payload), input)
+
+/** `/preview/<handle>/<deck-id>/<edition>/<note>/<side>`: one card side, as a sandboxed document. */
+export const previewCard = (
+  payload: Payload,
+  input: {
+    handle: string
+    deckId: string
+    edition: string
+    index: string
+    side: string
+    viewer: Viewer
+  },
+): Promise<PreviewResult> => catalogueUseCases.previewCard(catalogueDeps(payload), input)
+
+/** Whether the deck at `/d/<handle>/<deck-id>` was hidden (its page then says "withdrawn"). */
+export const deckGone = (payload: Payload, input: { handle: string; deckId: string }) =>
+  catalogueUseCases.deckGone(catalogueDeps(payload), input)

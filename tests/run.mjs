@@ -413,6 +413,8 @@ try {
         HUB_PYTHON: await hubPython(),
         PYTHONPATH: resolve('vendor/deckdock'),
       }
+      // The site's settings, so that the catalogue script can open the site (maintenance stays on).
+      await payload(['run', 'src/scripts/seed.ts'], withoutTotp(env))
       await withServer('start', env, async (env) => {
         await payload(['run', 'tests/decks.http.ts'], withoutTotp(env))
         // Reads back what it publishes, then runs deckdock/addon (../deckdock) when present.
@@ -420,9 +422,16 @@ try {
         if (!existsSync(join(addon, 'deckdock_addon', 'sources.py')))
           console.log(`  SKIP test réel du plugin : ${addon} absent (dépôt deckdock à côté)`)
         await payload(['run', 'tests/decks.serve.http.ts'], withoutTotp(env))
+        // The catalogue, the deck page and the card preview (turns maintenance off).
+        await payload(['run', 'tests/decks.catalogue.http.ts'], withoutTotp(env))
       })
     },
-    ['tests/decks.http.ts', 'tests/decks.serve.http.ts', 'tests/decks.addon.test.py'],
+    [
+      'tests/decks.http.ts',
+      'tests/decks.serve.http.ts',
+      'tests/decks.addon.test.py',
+      'tests/decks.catalogue.http.ts',
+    ],
   )
   await stage(
     'web',
@@ -497,6 +506,9 @@ try {
       // account journey and the public pages are tested as visitors see them.
       await payload(['run', 'src/scripts/seed.ts'], withoutTotp(env))
       await payload(['run', 'tests/performance.setup.ts'], withoutTotp(env))
+      // The published decks of the catalogue journey (tests/e2e/decks-catalogue.spec.ts).
+      if (existsSync('tests/e2e/decks-catalogue.setup.ts'))
+        await payload(['run', 'tests/e2e/decks-catalogue.setup.ts'], withoutTotp(env))
       await withServer('dev', env, (env) =>
         run(
           'node',

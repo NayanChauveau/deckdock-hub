@@ -13,6 +13,9 @@ export default function robots(): MetadataRoute.Robots {
       disallow: [
         '/admin',
         '/api/',
+        // DeckDock hub: the add-on's files and the card previews (the deck pages stay indexable).
+        '/d/',
+        '/preview/',
         '/fr/commande/suivi',
         '/en/commande/suivi',
         '/fr/commande/acces',

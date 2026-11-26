@@ -93,7 +93,7 @@ interface Stored {
 }
 function inMemoryPublishStore() {
   const editions: { id: number; deck: number; code: string; latest: number | null }[] = []
-  const versions: (Stored & { id: number; summary: unknown })[] = []
+  const versions: (Stored & { id: number; summary: unknown; preview?: unknown })[] = []
   /** The `expectedLatest` of every successful `record`. */
   const records: (number | null)[] = []
   /** Set to simulate a concurrent publish that wins the unique index before `record`. */
@@ -154,6 +154,7 @@ function inMemoryPublishStore() {
         deckJsonSha256: input.deckJsonSha256,
         files: input.files,
         summary: input.summary,
+        preview: input.preview,
       })
       edition.latest = id
       return 'created'
@@ -260,8 +261,48 @@ void test('a valid new version of a pending deck is pending review and stored', 
     homepage: 'https://example.test/verbs',
     notes: 3,
     size: 10,
+    // Folded for the catalogue search (no case, no accents).
+    search: 'verbs\nirregular verbs',
   })
+  // The deck page's preview, computed once from deck.json (domain/preview.ts).
+  assert.deepEqual(version.preview, { notetypes: [], notes: [], media: [] })
   assert.equal(ctx.publish.editions[0]?.latest, version.id)
+})
+
+void test('the stored version carries the preview notes and the accent-free search text', async () => {
+  const ctx = await setup()
+  const deck = {
+    ...deckJson({ name: 'Être et Avoir', description: 'Les verbes ÉLÉMENTAIRES' }),
+    notetypes: [
+      {
+        id: 'basic',
+        name: 'Basic',
+        kind: 'standard',
+        fields: ['Front', 'Back'],
+        templates: [{ name: 'Card 1', front: '{{Front}}', back: '{{Back}}' }],
+        css: '',
+      },
+    ],
+    notes: [
+      {
+        guid: 'g1',
+        notetype: 'basic',
+        deck: '',
+        fields: { Front: '<img src="a.png">', Back: 'b' },
+        tags: [],
+      },
+    ],
+    media: [{ filename: 'a.png', sha256: sha('x'), size: 1 }],
+  }
+  const result = await run(ctx.deps({ deck }).deps, ctx.token)
+  assert.equal(result.httpStatus, 200)
+  const version = present(ctx.publish.versions[0])
+  assert.equal(
+    Reflect.get(Object(version.summary), 'search'),
+    'etre et avoir\nles verbes elementaires',
+  )
+  assert.deepEqual(Reflect.get(Object(version.preview), 'media'), ['a.png'])
+  assert.equal((Reflect.get(Object(version.preview), 'notes') as unknown[]).length, 1)
 })
 
 void test('an approved deck is published at once', async () => {

@@ -79,3 +79,17 @@ export const editionAddress = (
   deckId: string,
   edition: string,
 ): string => `${origin.replace(/\/+$/, '')}${servePath(handle, deckId, edition)}/`
+
+/** The public page of a deck: `/{locale}/d/<handle>/<deck-id>`. */
+export const deckPagePath = (locale: string, handle: string, deckId: string): string =>
+  `/${encodeSegment(locale)}${servePath(handle, deckId)}`
+
+/** The preview document of one side of a preview note: `/preview/<handle>/<deck-id>/<edition>/<n>/<side>`. */
+export const previewPath = (
+  handle: string,
+  deckId: string,
+  edition: string,
+  index: number,
+  side: 'front' | 'back',
+): string =>
+  ['', 'preview', handle, deckId, edition, String(index), side].map(encodeSegment).join('/')

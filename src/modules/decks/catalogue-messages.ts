@@ -1,0 +1,131 @@
+/** Texts of the public catalogue and deck pages, in French and English. */
+const fr = {
+  catalogue: {
+    title: 'Catalogue des decks',
+    description:
+      'Des decks Anki publiés avec DeckDock : cherchez un deck, puis collez son adresse dans le plugin pour le suivre.',
+    intro:
+      'Des decks Anki publiés depuis leur dépôt et validés par un administrateur. Choisissez un deck, puis collez son adresse dans le plugin DeckDock pour recevoir ses mises à jour.',
+    searchLabel: 'Rechercher un deck',
+    searchHint: 'Dans le nom et la description, sans tenir compte des majuscules ni des accents.',
+    languageLabel: 'Langue',
+    anyLanguage: 'Toutes les langues',
+    submit: 'Rechercher',
+    results: (total: number) =>
+      total === 0 ? 'Aucun deck trouvé.' : total === 1 ? '1 deck' : `${total} decks`,
+    by: 'par',
+    editions: (codes: string) => `Éditions : ${codes}`,
+    languages: (names: string) => `Langues : ${names}`,
+    updated: (date: string) => `Mis à jour le ${date}`,
+    pagination: 'Pages du catalogue',
+    previous: 'Page précédente',
+    next: 'Page suivante',
+    pageOf: (page: number, count: number) => `Page ${page} sur ${count}`,
+  },
+  deck: {
+    catalogue: 'Tous les decks',
+    by: 'par',
+    pending:
+      'En attente de validation : cette page n’est visible que par vous jusqu’à la validation du deck.',
+    facts: 'Informations',
+    license: 'Licence',
+    homepage: 'Page d’accueil',
+    notes: 'Notes',
+    lastVersion: 'Dernière version',
+    languages: 'Langues',
+    none: 'Non précisée',
+    description: 'Description',
+    editionsTitle: 'Éditions',
+    editionsIntro:
+      'Pour suivre une édition, copiez son adresse et collez-la dans le plugin DeckDock d’Anki.',
+    shown: 'affichée',
+    show: (code: string) => `Afficher l’édition ${code}`,
+    address: (code: string) => `Adresse de l’édition ${code}`,
+    copy: (code: string) => `Copier l’adresse de ${code}`,
+    copied: 'Adresse copiée.',
+    copyFailed: 'Copie impossible : sélectionnez l’adresse et copiez-la.',
+    previewTitle: 'Aperçu',
+    previewIntro:
+      'Quelques cartes de l’édition affichée, recto et verso. Le rendu est approché : Anki peut les afficher un peu différemment.',
+    noPreview: 'Pas d’aperçu pour cette version.',
+    card: (n: number) => `Carte ${n}`,
+    front: 'Recto',
+    back: 'Verso',
+    frameTitle: (n: number, side: string) => `Carte ${n}, ${side.toLowerCase()}`,
+    historyTitle: 'Historique des versions',
+    historyCaption: (code: string) => `Versions reçues pour l’édition ${code}`,
+    receivedAt: 'Reçue le',
+    version: 'Version',
+    goneTitle: 'Deck retiré',
+    goneText: 'Ce deck a été retiré du hub. Les cartes déjà installées restent dans Anki.',
+    missingTitle: 'Deck introuvable',
+    missingText: 'Aucun deck publié à cette adresse.',
+  },
+}
+
+export type CatalogueMessages = typeof fr
+
+const en: CatalogueMessages = {
+  catalogue: {
+    title: 'Deck catalogue',
+    description:
+      'Anki decks published with DeckDock: find a deck, then paste its address into the add-on to follow it.',
+    intro:
+      'Anki decks published from their repository and approved by an administrator. Pick a deck, then paste its address into the DeckDock add-on to receive its updates.',
+    searchLabel: 'Search for a deck',
+    searchHint: 'In the name and description, ignoring case and accents.',
+    languageLabel: 'Language',
+    anyLanguage: 'All languages',
+    submit: 'Search',
+    results: (total: number) =>
+      total === 0 ? 'No deck found.' : total === 1 ? '1 deck' : `${total} decks`,
+    by: 'by',
+    editions: (codes: string) => `Editions: ${codes}`,
+    languages: (names: string) => `Languages: ${names}`,
+    updated: (date: string) => `Updated on ${date}`,
+    pagination: 'Catalogue pages',
+    previous: 'Previous page',
+    next: 'Next page',
+    pageOf: (page: number, count: number) => `Page ${page} of ${count}`,
+  },
+  deck: {
+    catalogue: 'All decks',
+    by: 'by',
+    pending: 'Awaiting review: only you can see this page until the deck is approved.',
+    facts: 'Details',
+    license: 'Licence',
+    homepage: 'Homepage',
+    notes: 'Notes',
+    lastVersion: 'Latest version',
+    languages: 'Languages',
+    none: 'Not given',
+    description: 'Description',
+    editionsTitle: 'Editions',
+    editionsIntro:
+      'To follow an edition, copy its address and paste it into the DeckDock add-on in Anki.',
+    shown: 'shown',
+    show: (code: string) => `Show the ${code} edition`,
+    address: (code: string) => `Address of the ${code} edition`,
+    copy: (code: string) => `Copy the ${code} address`,
+    copied: 'Address copied.',
+    copyFailed: 'Could not copy: select the address and copy it.',
+    previewTitle: 'Preview',
+    previewIntro:
+      'A few cards of the edition shown, front and back. The rendering is approximate: Anki may show them slightly differently.',
+    noPreview: 'No preview for this version.',
+    card: (n: number) => `Card ${n}`,
+    front: 'Front',
+    back: 'Back',
+    frameTitle: (n: number, side: string) => `Card ${n}, ${side.toLowerCase()}`,
+    historyTitle: 'Version history',
+    historyCaption: (code: string) => `Versions received for the ${code} edition`,
+    receivedAt: 'Received on',
+    version: 'Version',
+    goneTitle: 'Deck withdrawn',
+    goneText: 'This deck was withdrawn from the hub. Cards already installed stay in Anki.',
+    missingTitle: 'Deck not found',
+    missingText: 'No deck is published at this address.',
+  },
+}
+
+export const catalogueMessages = { fr, en } satisfies Record<string, CatalogueMessages>

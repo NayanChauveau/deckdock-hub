@@ -233,7 +233,11 @@ void test('no rendering in the business layers: domain and application hold no H
   // Presentation (markup, inline styles, a site's colours) belongs to adapters: the order emails
   // are a document built by the application and rendered by adapters/email.
   const markup = /<(table|tr|td|p|a|div|span|br|img)\b|style="/
+  // One exception: the decks card preview's template engine, whose output is the markup Anki
+  // itself produces for a card (`<span class="cloze">`), shown only in a sandboxed document.
+  const allowed = new Set(['src/modules/decks/application/preview.ts'])
   const offenders = (await sourceFiles('src/modules'))
+    .filter(({ path }) => !allowed.has(path))
     .filter(({ path }) => /^src\/modules\/[^/]+\/(domain|application)\//.test(path))
     .filter(({ source }) => markup.test(source))
     .map(({ path }) => path)

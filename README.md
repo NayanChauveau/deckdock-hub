@@ -113,6 +113,30 @@ construit à partir de la dernière version de chaque édition, trié par éditi
 - Le test HTTP lance le vrai code du plugin (`deckdock/addon`, dépôt cloné à côté, ou
   `DECKDOCK_ADDON_SRC`) contre le serveur de test ; sans ce dépôt, il est sauté avec un message.
 
+## Catalogue, page de deck et aperçu
+
+- **Catalogue** `/{fr,en}/decks?q=&lang=&page=` : decks validés seulement, 20 par page, une ligne
+  par deck (l’édition dans la langue du visiteur, sinon la première par code). La recherche porte
+  sur le nom et la description, sans casse ni accents : un texte replié (`summary.search`) est
+  calculé à la publication, sans extension Postgres. `lang` filtre sur la sous-étiquette
+  principale des langues des éditions.
+- **Page de deck** `/{fr,en}/d/<pseudo>/<deck-id>?edition=` : licence, page d’accueil, éditions et
+  leurs adresses à copier, nombre de notes, dernière version, description Markdown (rendue en
+  éléments React, jamais en HTML de l’auteur), aperçu et historique. Deck en attente : 404 sauf
+  pour son auteur. Deck masqué : page « Deck retiré », avec le statut 404 (une page Next.js ne peut
+  pas répondre 410 ; les adresses `/d/…` du plugin répondent bien 410).
+- **Aperçu** : 5 notes au plus (une par type de note d’abord), choisies à la publication et
+  gardées dans `versions.preview`. Chaque face est un document à part,
+  `/preview/<pseudo>/<deck-id>/<édition>/<n>/<front|back>`, servi avec la CSP
+  `default-src 'none'; img-src <origine>; media-src <origine>; style-src 'unsafe-inline'; sandbox allow-scripts; frame-ancestors 'self'`
+  et affiché dans `<iframe sandbox="allow-scripts">` : le HTML et le JavaScript des cartes
+  tournent dans une origine opaque, sans accès aux cookies ni aux pages du site. Faute de
+  `script-src`, cette CSP bloque en fait les scripts des cartes. `next.config.mjs` exclut
+  `/preview/` de sa CSP de base, dont les en-têtes remplaceraient ceux de la route. Les pages
+  publiques autorisent `frame-src 'self'` pour ces cadres.
+- `robots.txt` exclut `/d/` et `/preview/` ; le catalogue et les pages de deck restent indexables
+  (selon `PUBLIC_INDEXING`).
+
 ## Prérequis
 
 - Node.js 24 (`nvm use`, version de référence dans `.nvmrc`).

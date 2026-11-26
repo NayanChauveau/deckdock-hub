@@ -303,6 +303,15 @@ export interface Version {
     | number
     | boolean
     | null;
+  preview?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   files:
     | {
         [k: string]: unknown;
@@ -644,6 +653,7 @@ export interface VersionsSelect<T extends boolean = true> {
   version?: T;
   receivedAt?: T;
   summary?: T;
+  preview?: T;
   files?: T;
   deckJsonSha256?: T;
   updatedAt?: T;

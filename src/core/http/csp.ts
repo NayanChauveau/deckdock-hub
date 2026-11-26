@@ -43,7 +43,9 @@ export function contentSecurityPolicy({
     `font-src ${["'self'", 'data:', ...cdn].join(' ')}`,
     `connect-src ${["'self'", ...measurement].join(' ')}`,
     "worker-src 'self' blob:",
-    "frame-src 'none'",
+    // Public pages may frame the site's own documents (the DeckDock card previews, sandboxed);
+    // the administration frames nothing.
+    `frame-src ${admin ? "'none'" : "'self'"}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

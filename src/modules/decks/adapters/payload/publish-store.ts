@@ -124,6 +124,7 @@ export function payloadPublishStore(
               version: input.version,
               receivedAt: receivedAt.toISOString(),
               summary: { ...input.summary },
+              preview: { ...input.preview },
               files: { ...input.files },
               deckJsonSha256: input.deckJsonSha256,
             },
