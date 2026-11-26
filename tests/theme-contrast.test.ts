@@ -58,7 +58,6 @@ const textPairs = [
   ['destructive', 'card'],
   ['brand', 'background'],
   ['brand', 'card'],
-  ['art-signature', 'art-paper'],
   // The homepage: its badge and step numbers, its lead on the hero's tinted top, the code excerpt.
   ['brand', 'accent'],
   ['muted-foreground', 'secondary'],

@@ -3,7 +3,6 @@ import { messages as coreMessages } from '@/core/i18n/messages'
 /** DeckDock's own interface texts, FR and EN: the shared header and footer (the homepage's are in home-content.ts). */
 export const siteMessages = {
   fr: {
-    home: 'Accueil DeckDock',
     catalogue: 'Catalogue',
     publish: 'Publier un deck',
     guide: 'Guide',
@@ -21,7 +20,6 @@ export const siteMessages = {
     maintenanceText: 'DeckDock ouvre ici dans quelques jours. Merci de votre patience.',
   },
   en: {
-    home: 'DeckDock home',
     catalogue: 'Catalogue',
     publish: 'Publish a deck',
     guide: 'Guide',

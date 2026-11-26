@@ -30,12 +30,6 @@
   /* The workflow excerpt of the homepage: a dark code block in both themes. */
   --code: #1b1a2e;
   --code-foreground: #e0e7ff;
-  --art-border: #e4e2f3;
-  --art-paper: #ffffff;
-  --art-edge: #eef0ff;
-  --art-stroke: #a5a3c4;
-  --art-shadow-stroke: #c4c2dc;
-  --art-signature: #6f6d92; /* 4.5:1 minimum on --art-paper (WCAG AA) */
   --initial-foreground: #ffffff;
   --initial-1: #4f46e5;
   --initial-2: #be185d;
@@ -51,7 +45,6 @@
   --font-display: var(--font-body);
   --font-sans: var(--font-body);
   --font-serif: var(--font-display);
-  --shadow-art: var(--shadow-card);
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -90,12 +83,6 @@
   --shadow-card: 0 0 0 1px #24223a;
   --code: #0a0914;
   --code-foreground: #e0e7ff;
-  --art-border: #24223a;
-  --art-paper: #17162a;
-  --art-edge: #1e1b4b;
-  --art-stroke: #6f6d92;
-  --art-shadow-stroke: #4a4868;
-  --art-signature: #a3a1bd; /* 4.5:1 minimum on --art-paper (WCAG AA) */
   --chart-2: #f472b6;
   --initial-foreground: #ffffff;
   --initial-1: #5c5ff0;

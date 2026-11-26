@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { LOCALE_HEADER, PATHNAME_HEADER } from '@/core/http/proxy'
+import { LOCALE_HEADER, PATHNAME_HEADER } from '@/proxy'
 import DeckNotFound from '@/modules/decks/ui/DeckNotFound'
 import { PublicShell } from '@/site/PublicShell'
 

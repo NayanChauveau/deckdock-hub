@@ -12,7 +12,6 @@ const fr = {
   },
   space: {
     title: 'Mes decks',
-    account: 'Mon compte',
     intro:
       'Publiez vos decks DeckDock depuis leur dépôt : chaque deck a son jeton, que la CI utilise pour envoyer ses éditions au hub.',
     handleTitle: 'Choisissez votre pseudo',
@@ -59,7 +58,6 @@ const fr = {
     hidden: 'Masqué',
   } satisfies Record<DeckStatus, string>,
   deck: {
-    back: 'Tous mes decks',
     breadcrumb: 'Fil d’Ariane',
     guideTitle: 'Mettre en ligne ce deck',
     guideIntro: 'Trois étapes, depuis le dépôt GitHub du deck :',
@@ -83,7 +81,6 @@ const fr = {
       },
     },
     guideLink: 'Lire le guide complet',
-    statusTitle: 'Statut',
     statusHelp: {
       pending:
         'Un administrateur doit valider ce deck avant qu’il apparaisse dans le catalogue. En attendant, vous pouvez le tester avec son adresse.',
@@ -150,7 +147,6 @@ const en: DeckMessages = {
   },
   space: {
     title: 'My decks',
-    account: 'My account',
     intro:
       'Publish your DeckDock decks from their repository: each deck has its token, which the CI uses to send its editions to the hub.',
     handleTitle: 'Choose your handle',
@@ -197,7 +193,6 @@ const en: DeckMessages = {
     hidden: 'Hidden',
   },
   deck: {
-    back: 'All my decks',
     breadcrumb: 'Breadcrumb',
     guideTitle: 'Put this deck online',
     guideIntro: 'Three steps, from the deck’s GitHub repository:',
@@ -221,7 +216,6 @@ const en: DeckMessages = {
       },
     },
     guideLink: 'Read the full guide',
-    statusTitle: 'Status',
     statusHelp: {
       pending:
         'An administrator must approve this deck before it appears in the catalogue. Meanwhile, you can test it with its address.',
