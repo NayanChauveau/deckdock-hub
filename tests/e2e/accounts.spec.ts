@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { accountMessages } from '../../src/modules/accounts/messages'
-import { accessibilityViolations, guardEveryPage, signInAdmin } from './support'
+import { accessibilityViolations, guardEveryPage } from './support'
 
 guardEveryPage()
 
@@ -81,29 +81,14 @@ test('connexion : la carte « lien envoyé », en clair et en sombre, à 390 px'
   await expect(page.getByRole('main').getByRole('status')).toHaveText(t.sent)
   await expect(page.getByRole('heading', { level: 2, name: t.sentTitle })).toBeFocused()
   expect(await accessibilityViolations(page)).toEqual([])
+  // The sent state lives in the page (no reload): axe waits for the switch to the dark theme to
+  // finish its colour transitions (buttons have `transition-all`).
   await page.emulateMedia({ colorScheme: 'dark' })
+  await page.waitForFunction(() => document.getAnimations().length === 0)
   expect(await accessibilityViolations(page)).toEqual([])
   await noOverflowAt390(page)
   await page.getByRole('button', { name: t.otherAddress }).click()
   await expect(page.getByLabel(t.email)).toBeVisible()
-})
-
-test('en-tête : un administrateur aussi connecté comme visiteur voit son menu de visiteur', async ({
-  page,
-}) => {
-  await signInAdmin(page)
-  await signIn(page, 'fr', newVisitor('fr'))
-  const banner = page.getByRole('banner')
-  await expect(banner.getByRole('link', { name: 'Connexion' })).toHaveCount(0)
-  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
-  // The same on a page of the site layer, and the sign-in page still sends them to their account.
-  await page.goto('/fr/mentions-legales')
-  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
-  await page.goto('/fr/compte/connexion')
-  await expect(page).toHaveURL(/\/fr\/compte$/)
-  // The administration still sees an administrator.
-  await page.goto('/admin')
-  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà servi est expliqué', async ({

@@ -70,8 +70,10 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   module `accounts` (`SignInPage`, `DeletedPage`, `AccountView`) rendent un `<div>`, le `<main>`
   étant celui du cadre ; `src/styles/site.css` (en-tête, menus, pied). Le contrat
   `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête). L’en-tête lit la
-  session sans les cookies de l’administration (`visitorCookies` de `viewer.ts`) : un administrateur
-  aussi connecté comme visiteur voit son menu de visiteur, comme la page de connexion le voit.
+  session sans les cookies de l’administration (`visitorCookies` du nouveau
+  `src/core/http/visitor-cookies.ts`) : un administrateur aussi connecté comme visiteur voit son
+  menu de visiteur, comme la page de connexion le voit ; l’espace auteur (`signedInCustomer` du
+  module `decks`, via `visitorHeaders`) le reconnaît de même.
 - **Accueil** (`src/app/(frontend)/[locale]/page.tsx`) : réécrite pour DeckDock (textes dans
   `src/site/home-content.ts`, blocs dans `src/site/HomePage.tsx`), elle montre les decks récents
   (`src/modules/decks/ui/RecentDecks.tsx`) : elle appartient donc au module `decks` (`routes` du

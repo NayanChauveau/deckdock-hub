@@ -217,6 +217,34 @@ test('espace auteur : pseudo, deck, jeton copié, publication, validation par l�
   expect(stale.status()).toBe(401)
 })
 
+test('un administrateur aussi connecté comme visiteur : son menu, puis son espace auteur', async ({
+  page,
+}) => {
+  await signInAdmin(page)
+  await signIn(page, 'fr', `admin-visitor-${suffix()}@example.test`)
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toHaveCount(0)
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  // The same on a page of the site layer, and the sign-in page still sends them to their account.
+  await page.goto('/fr/mentions-legales')
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  await page.goto('/fr/compte/connexion')
+  await expect(page).toHaveURL(/\/fr\/compte$/)
+  // « Mes decks », from the header's menu and from the account page, opens the author space.
+  const mine = deckMessages.fr.space.title
+  await banner.getByRole('button', { name: /^Compte/ }).click()
+  await banner.getByRole('link', { name: mine }).click()
+  await expect(page).toHaveURL(/\/fr\/compte\/decks$/)
+  await expect(page.getByRole('heading', { level: 1, name: mine })).toBeVisible()
+  await page.goto('/fr/compte')
+  await page.getByRole('main').getByRole('link', { name: mine }).click()
+  await expect(page).toHaveURL(/\/fr\/compte\/decks$/)
+  await expect(page.getByRole('heading', { level: 1, name: mine })).toBeVisible()
+  // The administration still sees an administrator.
+  await page.goto('/admin')
+  await expect(page).not.toHaveURL(/\/admin\/login/)
+})
+
 test('author space in English', async ({ page }) => {
   const t = deckMessages.en
   await signIn(page, 'en', `author-en-${suffix()}@example.test`)

@@ -4,11 +4,12 @@ import { notFound } from 'next/navigation'
 import { getPayload, type Payload } from 'payload'
 import { cache, type ReactNode } from 'react'
 import { requestMaintenance } from '@/core/http/maintenance'
+import { visitorCookies } from '@/core/http/visitor-cookies'
 import { isLocale, type Locale } from '@/core/i18n/locales'
 import { logger } from '@/core/logger'
 import { extensionsOf } from '@/core/modules/resolve'
 import { SiteFrame } from '@/site/SiteChrome'
-import { viewerFrom, visitorCookies, type Viewer } from '@/site/viewer'
+import { viewerFrom, type Viewer } from '@/site/viewer'
 
 /**
  * What a module contributes to the accounts module for the header (`extensions.accounts`, the

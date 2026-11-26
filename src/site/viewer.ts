@@ -19,17 +19,3 @@ export async function viewerFrom(
   if (collection !== 'customers' || typeof id !== 'number') return { signedIn: false }
   return { signedIn: true, handle: await nameOf(id) }
 }
-
-/**
- * The request's cookies without the administration's (`<prefix>-token`, `<prefix>-totp`…, Payload's
- * `cookiePrefix`). The accounts strategy steps aside for an administrator's session, so that the
- * administration never sees a visitor; the header, like the sign-in page's `visitorSession`, shows
- * the visitor session of the same browser instead.
- */
-export function visitorCookies(cookie: string, prefix: string): string {
-  return cookie
-    .split(';')
-    .map((part) => part.trim())
-    .filter((part) => part && !part.startsWith(`${prefix}-`))
-    .join('; ')
-}
