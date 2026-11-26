@@ -23,6 +23,7 @@ const baselinePolicy = {
 export default withPayload({
   // No "X-Powered-By: Next.js, Payload" (withPayload adds it unless this is false).
   poweredByHeader: false,
+  experimental: { globalNotFound: true },
   // The Docker build sets NEXT_OUTPUT=standalone: the web image then ships only the traced server
   // files (no build tooling). Local and test builds keep the regular `.next` output for `next start`.
   // The server runs the compiled chunks: TypeScript sources and project files picked up by the

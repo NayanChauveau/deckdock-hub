@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Locale } from '@/core/i18n/locales'
 import { messages } from '@/site/messages'
 import { legalLabels, legalPageKeys, legalPath } from '@/core/i18n/legal'
+import { ThemeToggle } from '@/core/ui/theme/ThemeToggle'
 
 interface HeaderProps {
   locale: Locale
@@ -47,6 +48,7 @@ export function SiteHeader({
           EN<span className="sr-only"> – English</span>
         </Link>
       </nav>
+      <ThemeToggle labels={t.theme} />
     </header>
   )
 }

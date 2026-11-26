@@ -10,6 +10,8 @@ import '@/styles/globals.css'
 import { site } from '@/core/site'
 import { SiteIdentityProvider } from '@/core/ui/site-identity'
 import { siteMessages } from '@/site/messages'
+import { ThemeScript } from '@/core/ui/theme/ThemeScript'
+import { ThemeSync } from '@/core/ui/theme/ThemeToggle'
 
 // Pages opt into indexing individually; anything else (tracking, errors) stays noindex.
 export async function generateMetadata({
@@ -39,7 +41,11 @@ export default async function Layout({
   // Every public page, legal pages and order tracking included, goes through this gate.
   const maintenance = await requestMaintenance()
   return (
-    <html lang={locale}>
+    // The boot script sets the theme class on <html> before React hydrates it.
+    <html lang={locale} suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body>
         <SiteIdentityProvider identity={{ displayName: site.identity.displayName }}>
           {maintenance.visitorBlocked ? (
@@ -51,6 +57,7 @@ export default async function Layout({
             </>
           )}
         </SiteIdentityProvider>
+        <ThemeSync />
         <Analytics />
       </body>
     </html>

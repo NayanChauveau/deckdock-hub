@@ -64,6 +64,8 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
 - **`next.config.mjs`** : la CSP de base saute `/preview/`, et `/d/` reçoit la CSP des fichiers
   servis.
 - **`src/app/robots.ts`** : `/d/` et `/preview/` exclus.
+- **`tests/theme-contrast.test.ts`** : l’aperçu des notes (`bg-white` du cadre dans `DeckPage.tsx`)
+  est exclu de la recherche de couleurs écrites en dur : le document d’une note suppose une page blanche.
 - **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
 - **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
 - **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios

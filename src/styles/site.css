@@ -60,6 +60,22 @@
   .language-nav > span {
     color: var(--muted-foreground);
   }
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: -18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--foreground);
+  }
+  .theme-toggle:hover {
+    color: var(--brand);
+    border-color: var(--border-strong);
+  }
   .hero {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -291,6 +307,9 @@
     }
     .language-nav {
       margin-left: auto;
+    }
+    .theme-toggle {
+      margin-left: 0;
     }
     .hero {
       grid-template-columns: 1fr;

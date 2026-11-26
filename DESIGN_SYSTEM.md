@@ -66,11 +66,31 @@ uniquement le visuel de présentation existant.
 
 Les polices, rayons et ombres sont également centralisés. Les espacements des
 primitives utilisent l’échelle Tailwind ; les dimensions et grilles propres aux
-pages restent dans leurs fichiers de mise en page. Le thème public est **clair** ;
-aucun sélecteur ni promesse de mode sombre n’est ajouté.
+pages restent dans leurs fichiers de mise en page.
+
+## Clair et sombre
+
+Le site public a deux thèmes. Par défaut il suit le réglage du système
+(`prefers-color-scheme`) ; le bouton de l’en-tête (`ThemeToggle`) passe de
+« système » à « clair » puis « sombre », et le choix est gardé dans le navigateur
+(`localStorage['site-theme']`). Le thème est la classe `dark` sur `<html>`, celle
+qu’attendent les variantes `dark:` des primitives shadcn.
+
+- **Le mécanisme est dans le socle** (`src/core/ui/theme/`) : la préférence, le
+  script `ThemeScript` placé dans le `<head>` du layout public (il applique le
+  thème avant le premier affichage, donc sans flash, et porte le nonce de la CSP),
+  et le bouton. Un site n’y touche pas.
+- **La palette est au site** : `theme.css` définit chaque couleur deux fois, dans
+  `:root` (clair) et `.dark` (sombre). Changer l’allure d’un site, c’est changer ces
+  deux blocs. `tests/theme-contrast.test.ts` vérifie que chaque couleur du clair a sa
+  valeur sombre, les contrastes AA des deux thèmes, et l’absence de couleur écrite
+  en dur dans les styles et composants publics.
+- L’administration Payload garde son propre thème ; les emails gardent leurs
+  couleurs fixes.
 
 Utiliser les classes sémantiques (`bg-primary`, `text-muted-foreground`,
-`border-input`, etc.) plutôt que des couleurs recopiées dans les pages. Les styles
+`border-input`, etc.) plutôt que des couleurs recopiées dans les pages : c’est ce
+qui fait fonctionner le mode sombre partout. Les styles
 de pages vivent dans `@layer components` pour que les utilitaires et variantes
 puissent les surcharger sans une course à la spécificité. Les anciens styles
 qui redessinaient tous les `input`, `select` et boutons ont été supprimés.

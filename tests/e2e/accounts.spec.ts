@@ -59,6 +59,12 @@ for (const locale of ['fr', 'en'] as const) {
   }
 }
 
+test('accessibilité WCAG 2.1 AA en sombre : /fr/compte/connexion', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/fr/compte/connexion')
+  expect(await accessibilityViolations(page)).toEqual([])
+})
+
 test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà servi est expliqué', async ({
   page,
 }) => {

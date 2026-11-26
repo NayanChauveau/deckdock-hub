@@ -169,7 +169,7 @@
     "src/styles/**",
     "src/modules/index.ts",
     "src/app/(frontend)/[locale]/page.tsx",
-    "src/app/(frontend)/[locale]/[...slug]/**",
+    "src/app/(frontend)/[locale]/(legal)/legal-page.tsx",
     "tests/fixtures/**",
     "src/payload-types.ts",
     "src/app/(payload)/admin/importMap.js",

@@ -1,4 +1,6 @@
-/* Semantic tokens: the public site currently has one light theme. */
+/* Semantic tokens of the public site, light by default. `.dark` on <html> (src/core/ui/theme)
+   redefines every colour; tests/theme-contrast.test.ts checks both themes. A site changes its look
+   here, in both blocks. */
 :root {
   color-scheme: light;
   --background: #f6f3ed;
@@ -47,6 +49,33 @@
   --chart-3: var(--muted-foreground);
   --chart-4: var(--ring);
   --chart-5: var(--foreground);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #191b18;
+  --foreground: #e8e6df;
+  --card: #22251f;
+  --primary: #a7c49c;
+  --primary-foreground: #172014;
+  --secondary: #2c3029;
+  --muted: #2a2e27;
+  --muted-foreground: #a9ae9f;
+  --accent: #2e322b;
+  --destructive: #f08a7e;
+  --border: #363a32;
+  --input: #7c8273;
+  --ring: #c9a468;
+  --brand: #e8a097;
+  --selection: #4d3b36;
+  --border-strong: #5d6357;
+  --art-border: #3a3e36;
+  --art-paper: #262a23;
+  --art-edge: #30342c;
+  --art-stroke: #858a76;
+  --art-shadow-stroke: #6c715f;
+  --art-signature: #c2b393; /* 4.5:1 minimum on --art-paper (WCAG AA) */
+  --shadow-art: 7px 12px 24px #00000040;
 }
 
 @theme inline {

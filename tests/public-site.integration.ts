@@ -229,15 +229,24 @@ try {
     fr.includes('href="/fr/conditions-generales-de-vente"') && en.includes('href="/en/privacy"'),
     'Pied de page relié aux pages légales',
   )
-  // Unknown URLs, and legal slugs of the other language, get a real 404 with the localized server-rendered page.
-  for (const [path, text] of [
-    ['/fr/page-inexistante/sous-page', 'Cette page est introuvable'],
-    ['/en/mentions-legales', 'Back to the homepage'],
+  // A legal slug of the other language leads to the page in the URL's language.
+  const otherLanguage = await fetch(`${origin}/en/mentions-legales`, { redirect: 'manual' })
+  assert.equal(otherLanguage.status, 307)
+  assert.equal(
+    new URL(otherLanguage.headers.get('location') ?? '', origin).pathname,
+    '/en/legal-notice',
+  )
+  // Unknown URLs get a real 404, rendered on the server inside the public layout
+  // (global-not-found), not Next's error shell.
+  for (const [path, text, lang] of [
+    ['/fr/page-inexistante/sous-page', 'Cette page est introuvable', 'fr'],
+    ['/en/unknown-page', 'Back to the homepage', 'en'],
   ] as const) {
     const response = await fetch(origin + path)
     assert.equal(response.status, 404, path)
     const html = await response.text()
     assert.ok(html.includes(text), path)
+    assert.ok(html.includes(`<html lang="${lang}"`) && !html.includes('__next_error__'), path)
     assert.match(html, /<meta name="robots" content="noindex/, path)
   }
   const robots = await fetch(`${origin}/robots.txt`)
