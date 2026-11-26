@@ -225,6 +225,9 @@ try {
     assert.ok(home.text.includes('Verbes irréguliers'), 'approved deck on the home')
     assert.ok(home.text.includes('href="/fr/d/ivan/verbes"'), 'card leads to the deck page')
     assert.ok(home.text.includes('href="/fr/decks"'), 'Tout le catalogue')
+    // The same pills as the catalogue's cards: notes count and a relative time.
+    assert.ok(home.text.includes('3 notes'), 'home card shows the notes count')
+    assert.ok(/à l’instant|il y a/.test(home.text), 'home card shows a relative time')
     assert.ok(!home.text.includes('Deck confidentiel'), 'pending deck not on the home')
     assert.ok(!home.text.includes('Deck masqué'), 'hidden deck not on the home')
     assert.ok(!home.text.includes('Publier le premier deck'), 'no invitation once a deck exists')

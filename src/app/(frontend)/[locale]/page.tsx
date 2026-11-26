@@ -47,13 +47,7 @@ export default async function Home({ params }: Props) {
     <PublicShell locale={locale} paths={homePaths}>
       <HomePage
         locale={locale}
-        recent={
-          <RecentDecks
-            locale={locale}
-            by={homeContent[locale].recent.by}
-            empty={<RecentDecksEmpty locale={locale} />}
-          />
-        }
+        recent={<RecentDecks locale={locale} empty={<RecentDecksEmpty locale={locale} />} />}
       />
     </PublicShell>
   )

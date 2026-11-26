@@ -174,7 +174,7 @@ function files(path: string): string[] {
 const allowed = [
   {
     file: 'src/modules/decks/ui/PreviewCarousel.tsx',
-    text: 'className="h-56 w-full rounded-lg bg-white"',
+    text: 'className="h-96 w-full rounded-lg bg-white"',
   },
 ]
 

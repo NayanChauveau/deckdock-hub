@@ -48,7 +48,6 @@ export const homeContent = {
       tag: 'Decks récents',
       title: 'À découvrir',
       all: 'Tout le catalogue',
-      by: 'par',
       emptyTitle: 'Aucun deck pour l’instant',
       emptyText:
         'Le catalogue attend son premier deck. Il se publie depuis un dépôt GitHub, en quelques minutes.',
@@ -95,7 +94,6 @@ export const homeContent = {
       tag: 'Recent decks',
       title: 'Worth a look',
       all: 'Full catalogue',
-      by: 'by',
       emptyTitle: 'No decks yet',
       emptyText:
         'The catalogue is waiting for its first deck. Decks are published from a GitHub repository, in a few minutes.',

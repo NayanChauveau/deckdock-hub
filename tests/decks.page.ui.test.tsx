@@ -167,6 +167,16 @@ void test('preview carousel: one note at a time, front and back, previous and ne
     ['/preview/alice/verbes/fr/1/front', '/preview/alice/verbes/fr/1/back'],
   )
   for (const frame of frames()) assert.equal(frame.sandbox, 'allow-scripts')
+  // Tall enough for a back side (front + answer) without scrolling in the frame, the same on both
+  // sides: never the former 14 rem (`h-56`).
+  const heights = [...preview.querySelectorAll('iframe')].map((frame) =>
+    [...frame.classList].filter((name) => /^(sm:)?h-/.test(name)).join(' '),
+  )
+  assert.equal(heights[0], heights[1], 'front and back frames share one height')
+  assert.ok(
+    heights[0] && !heights[0].split(' ').includes('h-56'),
+    `taller than h-56: ${heights[0]}`,
+  )
   // Previous from the first note goes round to the last one.
   fireEvent.click(within(preview).getByRole('button', { name: t.previousNote }))
   fireEvent.click(within(preview).getByRole('button', { name: t.previousNote }))

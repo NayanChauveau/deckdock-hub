@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from '@testing-library/react/pure'
 import type { CatalogueCard, CataloguePage } from '../src/modules/decks/application/catalogue'
 import { catalogueMessages } from '../src/modules/decks/catalogue-messages'
 import { CatalogueView } from '../src/modules/decks/ui/CatalogueView'
+import { CatalogueDeckCard } from '../src/modules/decks/ui/components/CatalogueDeckCard'
 import { DeckCard } from '../src/modules/decks/ui/components/DeckCard'
 import { relativeTime } from '../src/modules/decks/ui/format'
 import { present } from './support/present'
@@ -95,6 +96,20 @@ void test('DeckCard: one link whose accessible name is the deck name, pills unde
   const cardElement = container.firstElementChild as HTMLElement
   for (const pill of ['fr', 'en', '80 notes', 'il y a 2 j', 'par alice'])
     assert.ok(within(cardElement).getByText(pill), pill)
+})
+
+void test('CatalogueDeckCard (catalogue and home): languages, notes, relative time and author', () => {
+  render(<CatalogueDeckCard locale="fr" deck={card()} now={NOW} />)
+  const description = (
+    screen.getByRole('link', { name: 'Verbes irréguliers' }).getAttribute('aria-describedby') ?? ''
+  )
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ')
+    .replace(/\s/g, ' ')
+  assert.match(description, /80 notes/)
+  assert.match(description, /il y a 2 j/)
+  assert.match(description, /par alice/)
 })
 
 void test('catalogue: big search, language pills as links keeping q and sort, sort select', () => {

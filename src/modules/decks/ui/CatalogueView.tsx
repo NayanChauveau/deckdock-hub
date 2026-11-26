@@ -7,17 +7,9 @@ import { Label } from '@/core/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/core/ui/native-select'
 import { CATALOGUE_SORTS, type CataloguePage, type CatalogueSort } from '../application/catalogue'
 import { catalogueMessages } from '../catalogue-messages'
-import { markdownText } from '../domain/markdown'
 import { authorSpacePath, cataloguePath } from '../paths'
-import { DeckCard } from './components/DeckCard'
-import { languageAutonym, relativeTime } from './format'
-
-/** At most this many characters of a description on a card (it shows two lines). */
-const SUMMARY = 220
-const summary = (description: string | null) => {
-  const text = description ? markdownText(description) : ''
-  return text.length > SUMMARY ? `${text.slice(0, SUMMARY - 1).trimEnd()}…` : text
-}
+import { CatalogueDeckCard } from './components/CatalogueDeckCard'
+import { languageAutonym } from './format'
 
 const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 const pill = `inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-5 text-sm font-semibold transition ${focus}`
@@ -198,19 +190,7 @@ export function CatalogueView({
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {result.decks.map((deck) => (
               <li key={`${deck.handle}/${deck.deckId}`} className="grid min-w-0">
-                <DeckCard
-                  href={deck.href}
-                  deckId={deck.deckId}
-                  name={deck.name}
-                  description={summary(deck.description) || null}
-                  icon={deck.icon}
-                  languages={deck.languages}
-                  pills={[
-                    t.notes(deck.notes),
-                    relativeTime(locale, deck.updatedAt, now) ?? t.justNow,
-                  ]}
-                  meta={`${t.by} ${deck.handle}`}
-                />
+                <CatalogueDeckCard locale={locale} deck={deck} now={now} />
               </li>
             ))}
           </ul>

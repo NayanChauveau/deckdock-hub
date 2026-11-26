@@ -45,7 +45,9 @@ export function PreviewCarousel({
               <figcaption className="px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 {label}
               </figcaption>
-              {/* The card's document assumes a white page: a white frame in both themes. */}
+              {/* The card's document assumes a white page: a white frame in both themes. Same fixed
+                  height on both sides, tall enough for a back (front + answer): the sandbox has no
+                  same-origin access, so the frame cannot size itself to its content. */}
               <iframe
                 key={note[side]}
                 src={note[side]}
@@ -53,7 +55,7 @@ export function PreviewCarousel({
                 title={t.frameTitle(index + 1, label)}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                className="h-56 w-full rounded-lg bg-white"
+                className="h-96 w-full rounded-lg bg-white"
               />
             </figure>
           )

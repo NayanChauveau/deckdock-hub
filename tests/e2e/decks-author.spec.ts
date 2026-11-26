@@ -388,6 +388,8 @@ test('espace auteur à 390 px : nom de 80 caractères, pseudo de 30, identifiant
       await page.setViewportSize({ width: 1280, height: 720 })
       await page.goto(path)
       await page.waitForLoadState('networkidle')
+      // The tab names the deck on its own page, and stays « Mes decks » on the list.
+      if (path.endsWith(deckId)) await expect(page).toHaveTitle(new RegExp(`^${deckId} · `))
       // The header's menu, named after the long handle, keeps to the bar on a computer.
       await expect(
         page.getByRole('banner').getByRole('button', { name: new RegExp(`^${handle}`) }),

@@ -8,7 +8,9 @@ import { AuthorShell } from './AuthorShell'
 import { accountPage, authorMetadata } from './page-shell'
 import { signedInCustomer, sitePayload } from './session'
 
-export const generateMetadata = authorMetadata((locale) => deckMessages[locale].space.title)
+export const generateMetadata = authorMetadata<{ deckId: string }>(
+  (locale, { deckId }) => `${deckId} · ${deckMessages[locale].space.title}`,
+)
 
 interface Props {
   params: Promise<{ locale: string; deckId: string }>
