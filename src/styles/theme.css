@@ -33,6 +33,15 @@
   --art-stroke: #a5a3c4;
   --art-shadow-stroke: #c4c2dc;
   --art-signature: #6f6d92; /* 4.5:1 minimum on --art-paper (WCAG AA) */
+  --initial-foreground: #ffffff;
+  --initial-1: #4f46e5;
+  --initial-2: #be185d;
+  --initial-3: #0f766e;
+  --initial-4: #b45309;
+  --initial-5: #7e22ce;
+  --initial-6: #0369a1;
+  --initial-7: #be123c;
+  --initial-8: #15803d;
   --radius: 0.875rem;
   --font-body:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -83,6 +92,15 @@
   --art-shadow-stroke: #4a4868;
   --art-signature: #a3a1bd; /* 4.5:1 minimum on --art-paper (WCAG AA) */
   --chart-2: #f472b6;
+  --initial-foreground: #ffffff;
+  --initial-1: #5c5ff0;
+  --initial-2: #c0185f;
+  --initial-3: #0f766e;
+  --initial-4: #b0520b;
+  --initial-5: #8b2fd6;
+  --initial-6: #0b72b0;
+  --initial-7: #c4153f;
+  --initial-8: #15803d;
   --chart-4: #22d3ee;
 }
 

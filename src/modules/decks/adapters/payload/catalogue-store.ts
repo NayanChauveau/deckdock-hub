@@ -21,6 +21,7 @@ const editionCard = (value: unknown): EditionCard => ({
   code: text(get(value, 'code')),
   name: text(get(value, 'name')),
   description: nullableText(get(value, 'description')),
+  icon: nullableText(get(value, 'icon')),
   languages: strings(get(value, 'languages')),
 })
 
@@ -69,6 +70,7 @@ export function payloadCatalogueStore(payload: Payload): CatalogueStore {
             'code', l.code,
             'name', l.summary->>'name',
             'description', l.summary->>'description',
+            'icon', l.summary->>'icon',
             'languages', l.summary->'languages') ORDER BY l.code) AS editions
         FROM latest l
         WHERE l.deck IN (SELECT deck FROM matching)
@@ -174,6 +176,7 @@ export function payloadCatalogueStore(payload: Payload): CatalogueStore {
           code,
           name: text(get(summary, 'name')),
           description: nullableText(get(summary, 'description')),
+          icon: nullableText(get(summary, 'icon')),
           languages: strings(get(summary, 'languages')),
           license: nullableText(get(summary, 'license')),
           homepage: nullableText(get(summary, 'homepage')),

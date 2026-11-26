@@ -59,6 +59,8 @@ const textPairs = [
   ['brand', 'background'],
   ['brand', 'card'],
   ['art-signature', 'art-paper'],
+  // The initial of a deck without an icon: white on each of the 8 stable colours.
+  ...Array.from({ length: 8 }, (_, i) => ['initial-foreground', `initial-${i + 1}`]),
 ]
 /** Non-text contrast (WCAG 1.4.11): the focus ring, field borders and strong borders need 3:1
  *  against the page in both themes. */

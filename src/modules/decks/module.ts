@@ -28,6 +28,7 @@ export const decksModule: SiteModule = {
   ],
   files: [
     'tests/decks.addon.test.py',
+    'tests/decks.components.ui.test.tsx',
     'tests/decks.domain.test.ts',
     'tests/decks.files.test.ts',
     'tests/decks.http.ts',

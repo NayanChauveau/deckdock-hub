@@ -15,6 +15,8 @@ export interface EditionCard {
   code: string
   name: string
   description: string | null
+  /** The deck's emoji for this edition, when it has one. */
+  icon: string | null
   languages: string[]
 }
 
@@ -99,6 +101,7 @@ export interface CatalogueCard {
   href: string
   name: string
   description: string | null
+  icon: string | null
   languages: string[]
   editions: string[]
   updatedAt: Date
@@ -152,6 +155,7 @@ export async function catalogue(
         href: deckPagePath(input.locale, entry.handle, entry.deckId),
         name: shown.name,
         description: shown.description,
+        icon: shown.icon,
         languages: shown.languages,
         editions: byCode(entry.editions).map((edition) => edition.code),
         updatedAt: entry.updatedAt,
@@ -203,6 +207,8 @@ export type DeckPageResult =
       handle: string
       deckId: string
       status: DeckStatus
+      /** The deck's icon: the visitor's edition, otherwise the first by code (not the tab chosen). */
+      icon: string | null
       /** Sorted by code. */
       editions: PublicEdition[]
       edition: PublicEdition
@@ -239,6 +245,7 @@ export async function deckPage(
     handle,
     deckId,
     status: deck.status,
+    icon: defaultEdition(editions, input.locale)?.icon ?? null,
     editions,
     edition,
     address: (code) => editionAddress(deps.origin, handle, deckId, code),

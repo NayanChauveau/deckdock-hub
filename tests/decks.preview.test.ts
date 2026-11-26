@@ -361,6 +361,7 @@ const edition = (
   code,
   name: `Deck ${code}`,
   description: `About ${code}`,
+  icon: null,
   languages,
   license: 'CC-BY-4.0',
   homepage: 'https://ex.test',
@@ -401,8 +402,14 @@ function fakeStore(
             deckId: 'verbs',
             updatedAt: new Date('2026-11-26T10:00:00Z'),
             editions: [
-              { code: 'en', name: 'Verbs', description: 'English', languages: ['en'] },
-              { code: 'fr', name: 'Verbes', description: 'Français', languages: ['fr', 'en'] },
+              { code: 'en', name: 'Verbs', description: 'English', icon: '📘', languages: ['en'] },
+              {
+                code: 'fr',
+                name: 'Verbes',
+                description: 'Français',
+                icon: null,
+                languages: ['fr', 'en'],
+              },
             ],
           },
         ],
@@ -441,6 +448,8 @@ void test('catalogue: 20 per page, query folded, language checked, edition of th
     { name: card.name, description: card.description, languages: card.languages },
     { name: 'Verbes', description: 'Français', languages: ['fr', 'en'] },
   )
+  // The French edition has no icon of its own: the card shows none (initial), not the English one.
+  assert.equal(card.icon, null)
   assert.deepEqual(card.editions, ['en', 'fr'])
   assert.equal(card.href, '/fr/d/alice/verbs')
 
@@ -453,6 +462,7 @@ void test('catalogue: 20 per page, query folded, language checked, edition of th
   assert.equal(english.page, 1)
   assert.equal(english.language, '')
   assert.equal(present(english.decks[0]).name, 'Verbs')
+  assert.equal(present(english.decks[0]).icon, '📘')
   assert.match(present(calls.at(-1)), /"query":"","language":"","offset":0/)
 })
 
@@ -800,4 +810,55 @@ void test('preview: adversarial inputs render in linear time', () => {
 
 void test('preview: texts longer than the cap are left out of a preview', () => {
   assert.equal(MAX_PREVIEW_TEXT_CHARS, 20_000)
+})
+
+void test('icon: the visitor’s edition, otherwise the first by code (catalogue and deck page)', async () => {
+  const { deps } = fakeStore({ 'alice/verbs': { id: 1, status: 'approved', customerId: 7 } })
+  const base = { ...deps.store }
+  deps.store.search = async (input) => {
+    const found = await base.search(input)
+    return {
+      ...found,
+      decks: found.decks.map((deck) => ({
+        ...deck,
+        editions: [
+          { code: 'de', name: 'Verben', description: null, icon: '🇩🇪', languages: ['de'] },
+          { code: 'en', name: 'Verbs', description: null, icon: null, languages: ['en'] },
+        ],
+      })),
+    }
+  }
+  // A French visitor, no French edition: the first by code (de) gives name and icon.
+  const cards = await catalogue(deps, {
+    q: undefined,
+    lang: undefined,
+    page: undefined,
+    locale: 'fr',
+  })
+  assert.equal(present(cards.decks[0]).icon, '🇩🇪')
+  assert.equal(present(cards.decks[0]).name, 'Verben')
+  deps.store.editions = async () => [
+    edition('en', ['en'], { icon: '📘' }),
+    edition('de', ['de'], { icon: '🇩🇪' }),
+  ]
+  const page = await deckPage(deps, {
+    handle: 'alice',
+    deckId: 'verbs',
+    edition: undefined,
+    locale: 'fr',
+    viewer: async () => null,
+  })
+  assert.equal(page.kind, 'found')
+  assert.equal(page.edition.icon, '🇩🇪')
+  assert.equal(page.icon, '🇩🇪')
+  // Choosing another edition keeps the deck's own icon (the default edition's).
+  const en = await deckPage(deps, {
+    handle: 'alice',
+    deckId: 'verbs',
+    edition: 'en',
+    locale: 'fr',
+    viewer: async () => null,
+  })
+  assert.equal(en.kind === 'found' && en.edition.icon, '📘')
+  assert.equal(en.kind === 'found' && en.icon, '🇩🇪')
 })

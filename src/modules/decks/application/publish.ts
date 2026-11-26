@@ -66,6 +66,8 @@ export interface VersionSummary {
   languages: string[]
   license: string | null
   homepage: string | null
+  /** The deck's emoji (`deck.icon`), when it has one. */
+  icon?: string
   notes: number
   /** Bytes of all the files. */
   size: number
@@ -312,6 +314,7 @@ export async function publishEdition<Archive>(
       languages: facts.languages,
       license: facts.license,
       homepage: facts.homepage,
+      ...(facts.icon ? { icon: facts.icon } : {}),
       notes: facts.notes,
       size: Object.values(files).reduce((total, file) => total + file.size, 0),
       search: searchText(facts.name, facts.description),

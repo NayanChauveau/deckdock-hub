@@ -30,6 +30,7 @@ export interface DeckFacts {
   languages: string[]
   license: string | null
   homepage: string | null
+  icon: string | null
   notes: number
 }
 
@@ -56,6 +57,7 @@ export function deckFacts(json: unknown): DeckFacts {
       : [],
     license: text(get(deck, 'license')),
     homepage: text(get(deck, 'homepage')),
+    icon: text(get(deck, 'icon')) || null,
     notes: Array.isArray(notes) ? notes.length : 0,
   }
 }

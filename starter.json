@@ -126,6 +126,7 @@
         "src/app/(frontend)/[locale]/d/[handle]/[deck]/not-found.tsx",
         "src/app/(frontend)/preview/[handle]/[deck]/[edition]/[note]/[side]/route.ts",
         "tests/decks.addon.test.py",
+        "tests/decks.components.ui.test.tsx",
         "tests/decks.domain.test.ts",
         "tests/decks.files.test.ts",
         "tests/decks.catalogue.http.ts",
