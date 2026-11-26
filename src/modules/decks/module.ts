@@ -1,4 +1,5 @@
 import type { SiteModule } from '@/core/modules/types'
+import { accountDeletion } from './adapters/payload/account-deletion'
 import { Authors } from './adapters/payload/Authors'
 import { Decks } from './adapters/payload/Decks'
 import { Editions } from './adapters/payload/Editions'
@@ -10,6 +11,8 @@ export const decksModule: SiteModule = {
   // `authors.customer` points to the accounts module's `customers` collection.
   dependsOn: ['accounts'],
   collections: [Authors, Decks, Editions, Versions],
+  // A deleted account's decks are hidden and their tokens revoked (adapters/payload/account-deletion.ts).
+  extensions: { accounts: accountDeletion },
   migrations: ['20261125_224245_decks'],
   routes: [
     'src/app/(frontend)/api/publish/[edition]/route.ts',
@@ -22,6 +25,7 @@ export const decksModule: SiteModule = {
     'tests/decks.http.ts',
     'tests/decks.integration.ts',
     'tests/decks.publish.test.ts',
+    'tests/decks.review.test.ts',
     'tests/decks.serve.http.ts',
     'tests/decks.serve.test.ts',
     'tests/decks.workspace.test.ts',

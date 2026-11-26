@@ -7,6 +7,9 @@ export type DecksErrorCode =
   | 'invalid_deck_id'
   | 'deck_exists'
   | 'not_found'
+  | 'transition_refused'
+  | 'reason_required'
+  | 'account_deleted'
 
 /** Business failures of the decks module carry a semantic code, never a transport status. */
 export class DecksError extends Error {

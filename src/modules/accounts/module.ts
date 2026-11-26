@@ -1,11 +1,21 @@
+import { extensionsOf } from '@/core/modules/resolve'
 import type { SiteModule } from '@/core/modules/types'
 import { isAdmin } from '@/core/payload/access'
 import { customersCollection } from './adapters/payload/Customers'
+import { isAccountsExtension } from './extension'
 import { emailPreviews } from './email-previews'
 import { getAuth, sweepOrphans } from './server'
 
 /** Visitor accounts in Payload; the site's administrators read and delete them. */
-export const Customers = customersCollection({ isAdmin, getAuth })
+export const Customers = customersCollection({
+  isAdmin,
+  getAuth,
+  // What other modules do when an account goes (extensions.accounts, see extension.ts).
+  beforeDelete: async ({ req, customerId }) => {
+    for (const extension of extensionsOf(req.payload, 'accounts', isAccountsExtension))
+      await extension.beforeCustomerDelete({ req, customerId })
+  },
+})
 
 /** Visitor accounts: Better Auth in its own `auth` schema, bridged to Payload by this module. */
 export const accountsModule: SiteModule = {
