@@ -32,11 +32,18 @@ export const Versions: CollectionConfig = {
     { name: 'version', label: 'Version', type: 'text', required: true },
     { name: 'receivedAt', label: 'Reçue le', type: 'date', required: true },
     {
-      // name, description, languages, license, homepage, note count, size.
+      // name, description, languages, license, homepage, note count, size, folded search text.
       name: 'summary',
       label: 'Résumé',
       type: 'json',
       required: true,
+    },
+    {
+      // The deck page's preview: at most 5 notes, their notetypes and media (domain/preview.ts),
+      // kept here so that a page view never reads the whole deck.json.
+      name: 'preview',
+      label: 'Aperçu',
+      type: 'json',
     },
     {
       // File name → { sha256, size }, for deck.json and every media file.

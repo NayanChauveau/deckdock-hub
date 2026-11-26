@@ -1,5 +1,7 @@
 import { deckFacts, isEditionCode, type DeckFacts } from '../domain/edition'
 import type { RecordId } from '../domain/model'
+import { previewOf, type DeckPreview } from '../domain/preview'
+import { searchText } from '../domain/search'
 import { findDeckByToken, recordTokenUse } from './decks'
 import type { DecksDeps } from './ports'
 
@@ -63,6 +65,8 @@ export interface VersionSummary {
   notes: number
   /** Bytes of all the files. */
   size: number
+  /** Name and description folded for the catalogue search (domain/search.ts). */
+  search: string
 }
 
 export interface NewVersion {
@@ -70,6 +74,8 @@ export interface NewVersion {
   edition: string
   version: string
   summary: VersionSummary
+  /** The deck page's preview: a few notes, their notetypes and media (domain/preview.ts). */
+  preview: DeckPreview
   files: FileMap
   deckJsonSha256: string
   /** The latest version the checks compared against (`null`: the edition had none). */
@@ -221,7 +227,8 @@ export async function publishEdition<Archive>(
     const issues = await workspace.check()
     if (issues.length) return refused(422, issues)
     // 6. The deck of the token and the edition of the URL.
-    const facts = deckFacts(await workspace.deckJson())
+    const json = await workspace.deckJson()
+    const facts = deckFacts(json)
     if (facts.id !== deck.deckId)
       return refused(
         409,
@@ -266,7 +273,9 @@ export async function publishEdition<Archive>(
       homepage: facts.homepage,
       notes: facts.notes,
       size: Object.values(files).reduce((total, file) => total + file.size, 0),
+      search: searchText(facts.name, facts.description),
     }
+    const preview = previewOf(json)
     // Steps 8 to 10 run twice at most: when another version of the edition was recorded since
     // step 9 read the latest one, they are judged again against that newer latest version.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -301,6 +310,7 @@ export async function publishEdition<Archive>(
         edition: input.edition,
         version: facts.version,
         summary,
+        preview,
         files,
         deckJsonSha256,
         expectedLatest: edition?.latest?.id ?? null,

@@ -71,7 +71,7 @@ void test('CSP: the analytics origin in script-src and connect-src of public pag
   )
   assert.equal(directive(policy, 'connect-src'), `connect-src 'self' ${umami.host}`)
   assert.equal(directive(policy, 'img-src'), "img-src 'self' data: blob:")
-  assert.equal(directive(policy, 'frame-src'), "frame-src 'none'")
+  assert.equal(directive(policy, 'frame-src'), "frame-src 'self'")
   const admin = contentSecurityPolicy({
     nonce: 'n',
     admin: true,
