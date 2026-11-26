@@ -18,7 +18,8 @@ src/core/      socle : configuration du site, Payload (config, accès, collectio
                i18n, interface commune, registre des modules
 src/modules/   modules optionnels, un dossier par module
 src/site/      ce qui est propre à ce site : textes, pages, messages, habillage
-src/app/       routes Next.js : de simples réexportations des modules ou du site
+src/app/       routes Next.js : réexportations des modules ou du site (les pages des
+               modules y sont enveloppées dans le cadre du site, `shellPage`)
 ```
 
 Règles vérifiées par `tests/architecture.test.ts` (analyse de l’AST TypeScript,

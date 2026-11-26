@@ -1,6 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
-import { accessibilityViolations, enrolTotp, guardEveryPage, signInAdmin } from './support'
+import { messages } from '../../src/core/i18n/messages'
+import {
+  accessibilityViolations,
+  enrolTotp,
+  guardEveryPage,
+  pageErrors,
+  pageOverflow,
+  signInAdmin,
+} from './support'
 
 guardEveryPage()
 
@@ -20,6 +28,7 @@ for (const path of [
   '/fr',
   '/en',
   '/fr/decks',
+  '/fr/mentions-legales',
   '/fr/conditions-generales-de-vente',
   '/en/privacy',
   '/fr/page-inexistante',
@@ -30,7 +39,7 @@ for (const path of [
   })
 }
 
-for (const path of ['/fr', '/fr/mentions-legales', '/en/decks', '/fr/page-inexistante']) {
+for (const path of ['/fr', '/en', '/fr/mentions-legales', '/en/decks', '/fr/page-inexistante']) {
   test(`mobile 390 px sans débordement horizontal : ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(path)
@@ -200,6 +209,7 @@ for (const path of [
   '/fr',
   '/en',
   '/fr/decks',
+  '/fr/mentions-legales',
   '/fr/conditions-generales-de-vente',
   '/en/privacy',
   '/fr/page-inexistante',
@@ -267,5 +277,99 @@ test('invitation : connexion avec code TOTP, lien d’invitation, mot de passe p
     expect(status).toBe(200)
   } finally {
     await context.close()
+  }
+})
+
+test('liens internes : aucun lien du site ne mène à une page introuvable', async ({ page }) => {
+  // Next.js prefetches the links in view: a link to a 404 is a broken page and a prefetch that
+  // never settles. The pages of the guide are followed too, for their links to each other.
+  const pages = ['/fr', '/en', '/fr/decks', '/en/decks', '/fr/mentions-legales', '/en/privacy']
+  const crawled = new Set<string>()
+  const checked = new Map<string, number>()
+  while (pages.length) {
+    const path = pages.shift() ?? ''
+    if (crawled.has(path)) continue
+    crawled.add(path)
+    await page.goto(path)
+    const hrefs = await page
+      .locator('a[href^="/"]')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''))
+    for (const href of hrefs) {
+      const target = href.split('#')[0] ?? ''
+      if (!target || checked.has(target)) continue
+      const response = await page.request.get(target)
+      checked.set(target, response.status())
+      expect(response.status(), `${target} (lien de ${path})`).toBeLessThan(400)
+      if (/^\/(fr|en)\/guide(\/|$)/.test(target)) pages.push(target)
+    }
+  }
+  expect([...checked.keys()]).toEqual(
+    expect.arrayContaining(['/fr/decks', '/fr/guide', '/fr/guide/publier-avec-github']),
+  )
+})
+
+test('maintenance : visiteur gardé dehors dans le cadre du site, administrateur avec la bannière, sombre sans flash', async ({
+  page,
+  browser,
+}) => {
+  await signInAdmin(page)
+  const origin = new URL(page.url()).origin
+  // The administration's « Site en maintenance » box, ticked then unticked.
+  const maintenance = async (on: boolean) => {
+    const response = await page.request.post('/api/globals/site-settings', {
+      headers: { Origin: origin },
+      data: { maintenance: on },
+    })
+    expect(response.status(), `maintenance ${String(on)}`).toBe(200)
+  }
+  await maintenance(true)
+  const visitors = await browser.newContext({ locale: 'fr-FR', colorScheme: 'dark' })
+  try {
+    const visitor = await visitors.newPage()
+    const errors = pageErrors(visitor)
+    for (const [path, locale] of [
+      ['/fr', 'fr'],
+      ['/en/decks', 'en'],
+    ] as const) {
+      await visitor.goto(path, { waitUntil: 'commit' })
+      await visitor.waitForSelector('body', { state: 'attached' })
+      expect(await isDark(visitor), path).toBe(true)
+      await visitor.waitForLoadState('networkidle')
+      await expect(
+        visitor.getByRole('heading', { level: 1, name: messages[locale].maintenanceTitle }),
+      ).toBeVisible()
+      await expect(visitor.getByRole('banner')).toHaveCount(1)
+      await expect(visitor.getByRole('main')).toHaveCount(1)
+      await expect(visitor.getByRole('contentinfo')).toHaveCount(1)
+      // No session is read for a kept-out visitor: no account entry at all.
+      await expect(
+        visitor.getByRole('banner').getByRole('link', { name: /Connexion|Sign in/ }),
+      ).toHaveCount(0)
+      expect(await accessibilityViolations(visitor), path).toEqual([])
+      await visitor.setViewportSize({ width: 390, height: 844 })
+      expect(await pageOverflow(visitor), path).toBeLessThanOrEqual(0)
+      await visitor.setViewportSize({ width: 1280, height: 720 })
+    }
+    expect(errors).toEqual([])
+
+    // The administrator sees the real site, under the banner, in the same frame.
+    const adminErrors = pageErrors(page)
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.goto('/fr', { waitUntil: 'commit' })
+    await page.waitForSelector('body', { state: 'attached' })
+    expect(await isDark(page)).toBe(true)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(messages.fr.maintenanceBanner)).toBeVisible()
+    await expect(
+      page.getByRole('heading', { level: 1, name: messages.fr.maintenanceTitle }),
+    ).toHaveCount(0)
+    await expect(page.getByRole('banner')).toHaveCount(1)
+    await expect(page.getByRole('main')).toHaveCount(1)
+    await expect(page.getByRole('contentinfo')).toHaveCount(1)
+    expect(await accessibilityViolations(page)).toEqual([])
+    expect(adminErrors).toEqual([])
+  } finally {
+    await visitors.close()
+    await maintenance(false)
   }
 })

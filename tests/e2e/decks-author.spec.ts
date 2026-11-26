@@ -3,8 +3,15 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { accountMessages } from '../../src/modules/accounts/messages'
 import { deckMessages } from '../../src/modules/decks/messages'
+import { CATALOGUE_SEED } from '../support/catalogue-seed'
 import { deckJson, editionArchive } from '../support/deck-archive'
-import { accessibilityViolations, guardEveryPage, signInAdmin } from './support'
+import {
+  accessibilityViolations,
+  guardEveryPage,
+  pageErrors,
+  pageOverflow,
+  signInAdmin,
+} from './support'
 
 guardEveryPage()
 
@@ -45,6 +52,7 @@ async function noOverflowAt390(page: Page) {
 }
 
 const suffix = () => randomBytes(3).toString('hex')
+const { long } = CATALOGUE_SEED
 
 test('espace auteur : redirection vers la connexion sans session', async ({ page }) => {
   await page.goto('/fr/compte/decks')
@@ -265,4 +273,117 @@ test('author space in English', async ({ page }) => {
   // Another author's deck, or none: not found, nothing revealed.
   const missing = await page.goto('/en/compte/decks/nobody-s-deck')
   expect(missing?.status()).toBe(404)
+})
+
+/** The header as the server sent it, before any script runs: what the visitor sees first. */
+async function serverHeader(page: Page, path: string) {
+  const html = await (await page.request.get(path)).text()
+  return html.slice(html.indexOf('<header'), html.indexOf('</header>'))
+}
+
+/** Opens `path` and lets it hydrate: no script error, no hydration mismatch. */
+async function hydrated(page: Page, path: string) {
+  const errors = pageErrors(page)
+  await page.goto(path)
+  await page.waitForLoadState('networkidle')
+  expect(errors, path).toEqual([])
+}
+
+test('en-tête : non connecté, sans pseudo, avec pseudo, administrateur — rendu serveur, sans erreur d’hydratation', async ({
+  page,
+  browser,
+}) => {
+  const signInLink = 'href="/fr/compte/connexion"'
+  // Signed out: « Connexion », in the HTML itself.
+  expect(await serverHeader(page, '/fr')).toContain(signInLink)
+  for (const path of ['/fr', '/fr/decks', '/fr/guide']) await hydrated(page, path)
+
+  // Signed in without a handle: the menu « Compte », never « Connexion » first.
+  await signIn(page, 'fr', `header-${suffix()}@example.test`)
+  const noHandle = await serverHeader(page, '/fr/decks')
+  expect(noHandle).not.toContain(signInLink)
+  expect(noHandle).toMatch(/class="account-name">Compte</)
+  for (const path of ['/fr', '/fr/decks', '/fr/compte', '/fr/compte/decks'])
+    await hydrated(page, path)
+
+  // With a handle (the longest allowed): the menu carries it.
+  const handle = `pseudo-tres-long-auteur-${suffix()}`
+  expect(handle).toHaveLength(30)
+  await page.goto('/fr/compte/decks')
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('textbox', { name: deckMessages.fr.space.handleLabel }).fill(handle)
+  await page.getByRole('button', { name: deckMessages.fr.space.handleSubmit }).click()
+  await expect(page.getByRole('main').getByText(handle, { exact: true })).toBeVisible()
+  expect(await serverHeader(page, '/fr/guide')).toContain(`class="account-name">${handle}<`)
+  for (const path of ['/fr', '/en/decks', '/fr/compte/decks']) await hydrated(page, path)
+
+  // An administrator only (no visitor session): « Connexion », the administration is elsewhere.
+  const adminContext = await browser.newContext({ locale: 'fr-FR' })
+  try {
+    const admin = await adminContext.newPage()
+    await signInAdmin(admin)
+    expect(await serverHeader(admin, '/fr')).toContain(signInLink)
+    await hydrated(admin, '/fr')
+    await expect(admin.getByRole('banner').getByRole('link', { name: 'Connexion' })).toBeVisible()
+  } finally {
+    await adminContext.close()
+  }
+})
+
+test('espace auteur à 390 px : nom de 80 caractères, pseudo de 30, identifiant de 100, longue adresse d’édition', async ({
+  page,
+}) => {
+  const t = deckMessages.fr
+  await signIn(page, 'fr', `long-${suffix()}@example.test`)
+  await page.goto('/fr/compte/decks')
+  await page.waitForLoadState('networkidle')
+  const handle = `pseudo-tres-long-auteur-${suffix()}`
+  await page.getByRole('textbox', { name: t.space.handleLabel }).fill(handle)
+  await page.getByRole('button', { name: t.space.handleSubmit }).click()
+  await expect(page.getByRole('main').getByText(handle, { exact: true })).toBeVisible()
+  const deckId = `${'tres-long-'.repeat(10).slice(0, 99)}9`
+  expect(deckId).toHaveLength(100)
+  await page.getByRole('textbox', { name: t.space.deckIdLabel }).fill(deckId)
+  await page.getByRole('button', { name: t.space.newSubmit }).click()
+  const token = await page.getByRole('textbox', { name: t.token.label }).inputValue()
+  // An 80-character name, as the CI's deck.json gives it.
+  const longDeck = deckJson({ id: deckId, edition: 'en', version: '2026-11-26-long' })
+  longDeck.deck.name = long.name
+  const published = await page.request.post('/api/publish/en', {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/gzip' },
+    data: await editionArchive(longDeck),
+  })
+  expect(published.status(), await published.text()).toBe(200)
+
+  const origin = new URL(page.url()).origin
+  for (const path of ['/fr/compte/decks', `/fr/compte/decks/${deckId}`]) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.setViewportSize({ width: 1280, height: 720 })
+      await page.goto(path)
+      await page.waitForLoadState('networkidle')
+      // The header's menu, named after the long handle, keeps to the bar on a computer.
+      await expect(
+        page.getByRole('banner').getByRole('button', { name: new RegExp(`^${handle}`) }),
+      ).toBeVisible()
+      expect(await pageOverflow(page), `${path} ${scheme} ordinateur`).toBeLessThanOrEqual(0)
+      await page.setViewportSize({ width: 390, height: 844 })
+      if (path.endsWith(deckId))
+        await expect(
+          page.getByText(`${origin}/d/${handle}/${deckId}/en/`, { exact: true }),
+        ).toBeVisible()
+      else
+        await expect(
+          page.getByRole('listitem').filter({ has: page.getByRole('link', { name: long.name }) }),
+        ).toContainText(deckId)
+      expect(await pageOverflow(page), `${path} ${scheme}`).toBeLessThanOrEqual(0)
+      expect(await accessibilityViolations(page), `${path} ${scheme}`).toEqual([])
+      // The mobile menu, with the handle at its head, open.
+      await page.getByRole('banner').getByRole('button', { name: 'Menu' }).click()
+      await expect(
+        page.getByRole('banner').getByText(handle, { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1)
+      expect(await pageOverflow(page), `${path} ${scheme} menu`).toBeLessThanOrEqual(0)
+    }
+  }
 })

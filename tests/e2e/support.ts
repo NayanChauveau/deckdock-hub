@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { totpCode } from '../support/totp'
 
 /** Content Security Policy violations seen by the browser in the current test (src/core/http/csp.ts). */
@@ -41,12 +43,19 @@ export function guardEveryPage() {
   })
 }
 
-/** Browser administrator, created by the first test that needs it and reused by the others. */
-export const admin = {
-  email: 'browser-admin@example.test',
-  password: randomBytes(24).toString('hex'),
-  secret: '',
-}
+/**
+ * Browser administrator, created by the first test that needs it and reused by the others. Kept in
+ * the run's output folder (emptied by Playwright at the start of each run): after a failed test,
+ * Playwright starts a new worker process, which signs in again instead of registering twice.
+ */
+const adminFile = join(process.env['E2E_OUTPUT_DIR'] || 'test-results', 'browser-admin.json')
+export const admin: { email: string; password: string; secret: string } = existsSync(adminFile)
+  ? (JSON.parse(readFileSync(adminFile, 'utf8')) as {
+      email: string
+      password: string
+      secret: string
+    })
+  : { email: 'browser-admin@example.test', password: randomBytes(24).toString('hex'), secret: '' }
 
 /** Typed into the six boxes of the payload-totp form, which submits itself once filled. */
 export async function typeTotpCode(page: Page, secret: string) {
@@ -81,6 +90,8 @@ export async function signInAdmin(page: Page) {
     // Signed in by the password only: the administration first requires the TOTP enrolment.
     await page.goto('/admin')
     admin.secret = await enrolTotp(page)
+    mkdirSync(dirname(adminFile), { recursive: true })
+    writeFileSync(adminFile, JSON.stringify(admin), { mode: 0o600 })
     return
   }
   await page.goto('/admin/login')
@@ -105,3 +116,21 @@ export async function accessibilityViolations(page: Page) {
         .join(' | ')}`,
   )
 }
+
+/**
+ * The page's script errors and console errors from now on (a hydration mismatch is one): the array
+ * fills as the page runs. A 404 page's own response is not an error of the page.
+ */
+export function pageErrors(page: Page): string[] {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(`${page.url()}: ${error.message}`))
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !message.text().includes('status of 404'))
+      errors.push(`${page.url()}: ${message.text()}`)
+  })
+  return errors
+}
+
+/** Horizontal overflow of the page, in pixels (0 or less: nothing sticks out). */
+export const pageOverflow = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)

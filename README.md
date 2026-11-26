@@ -84,6 +84,38 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   `tests/starter-coverage.test.ts` suit). Le global `site-content` n’est plus lu par l’accueil
   (la collection reste). `deploy/smoke_site.py` cherche une phrase de l’accueil sur `/fr` une fois
   le site ouvert ; `src/styles/theme.css` gagne `--code` et `--code-foreground` (extrait du workflow).
+  **Attention** : l’accueil étant une route du module `decks`, `pnpm module:remove decks`
+  supprimerait aussi `src/app/(frontend)/[locale]/page.tsx` ; il faudrait d’abord redonner un
+  accueil au site.
+- **Réglages de l’administration devenus sans effet sur les pages** : le nom « DeckDock » est dans
+  le code (`SITE_NAME` de `src/site/SiteChrome.tsx`, qui sert aussi aux métadonnées de l’accueil),
+  si bien que les champs `siteName` et `footerText` du global `site-settings` ne pilotent plus
+  l’en-tête ni le pied de page ; les textes de l’accueil sont dans `src/site/home-content.ts` et le
+  global `site-content` n’est plus lu par l’accueil. Les champs restent (le seed les remplit) : les
+  retirer demanderait une migration. Les emails et la page de maintenance prennent le nom de
+  `site.config.json` (`identity.displayName`).
+- **Repris d’une version plus récente du starter** (à l’identique, pour le mode sombre et la 404
+  rendue sur le serveur) : `src/core/ui/theme/` (`preference.ts`, `ThemeScript.tsx`,
+  `ThemeToggle.tsx`), les libellés `theme` de `src/core/i18n/messages.ts`, `ThemeScript` dans le
+  `<head>` et `ThemeSync` dans `src/app/(frontend)/[locale]/layout.tsx`,
+  `src/app/global-not-found.tsx` et `experimental.globalNotFound` dans `next.config.mjs`, les
+  routes `(legal)/` (le `[...slug]/page.tsx` du hub devient `(legal)/legal-page.tsx`), avec
+  `tests/theme.test.ts`, `tests/theme.ui.test.tsx`, `tests/legal-routes.test.ts`. Une mise à jour
+  depuis le starter ne devrait rien y changer.
+- **Styles** : `src/styles/commerce.css` (parcours de commande, retiré avec le module `orders`) est
+  supprimé, avec son import dans `src/styles/globals.css` ; les classes de `site.css` qu’aucune
+  page n’utilise plus sont retirées, comme les tokens `--art-*` du visuel d’accueil du starter.
+- **`src/core/modules/types.ts`** : le commentaire de `routes` dit qu’une route de page peut
+  envelopper la page du module dans le cadre du site (`shellPage`), pas seulement la réexporter.
+- **Tests du starter adaptés** : `tests/e2e/site.spec.ts` (cadre commun, FR · EN, mode sombre, 404,
+  maintenance, liens internes, accessibilité en clair et en sombre, 390 px),
+  `tests/public-site.integration.ts` (pages servies par le build de production),
+  `tests/smoke_harness.py` (phrase de l’accueil), `tests/starter-coverage.test.ts` ; nouveaux :
+  `tests/site-chrome.ui.test.tsx`, `tests/visitor-cookies.test.ts`, `tests/guide.test.ts`.
+- **`package.json`** : `markdown-it` (rendu du guide).
+- **`tests/e2e/support.ts`** : `pageErrors` (erreurs de script et d’hydratation d’une page),
+  `pageOverflow`, et l’administrateur du navigateur gardé dans le dossier de sortie de Playwright
+  (un worker relancé après un échec se reconnecte au lieu de recréer le compte).
 - **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
 - **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
   `'none'` dans l’administration.
