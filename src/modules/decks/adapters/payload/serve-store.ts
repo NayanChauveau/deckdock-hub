@@ -1,5 +1,5 @@
+import { sql } from '@payloadcms/db-postgres'
 import type { Payload } from 'payload'
-import type { FileMap } from '../../application/publish'
 import type { ServeStore } from '../../application/serve'
 import type { IndexEntry } from '../../domain/serving'
 import { isDeckStatus } from '../../domain/status'
@@ -10,12 +10,16 @@ const idOf = (value: unknown): number | null => {
   return typeof raw === 'number' ? raw : null
 }
 
-function toFiles(value: unknown): FileMap {
-  const files: Record<string, { sha256: string; size: number }> = {}
-  if (typeof value !== 'object' || value === null) return files
-  for (const [name, file] of Object.entries(value))
-    files[name] = { sha256: String(get(file, 'sha256')), size: Number(get(file, 'size')) }
-  return files
+/** A `{ sha256, size }` entry of a version's file map, or `null` (absent or malformed). */
+function toFile(value: unknown): { sha256: string; size: number } | null {
+  const sha256 = get(value, 'sha256')
+  const size = get(value, 'size')
+  return typeof value === 'object' &&
+    value !== null &&
+    typeof sha256 === 'string' &&
+    typeof size === 'number'
+    ? { sha256, size }
+    : null
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
@@ -99,21 +103,16 @@ export function payloadServeStore(payload: Payload): ServeStore {
       })
     },
 
-    async latestFiles(deck, code) {
+    async latestFile(deck, code, key) {
       const edition = (await editionsOf(deck, code))[0]
       const id = edition ? idOf(get(edition, 'latestVersion')) : null
       if (id === null) return null
-      const version = (
-        await payload.find({
-          collection: 'versions',
-          where: { id: { equals: id } },
-          limit: 1,
-          pagination: false,
-          select: { files: true },
-          ...system,
-        })
-      ).docs[0]
-      return version ? toFiles(get(version, 'files')) : null
+      // One entry of the version's file map, looked up by key in Postgres (`files` holds up to
+      // 20 000 entries): the key is a bound parameter, never part of the SQL text.
+      const result = await payload.db.drizzle.execute<{ file: unknown }>(
+        sql`SELECT files -> ${key}::text AS file FROM versions WHERE id = ${id}`,
+      )
+      return toFile(result.rows[0]?.file)
     },
   }
 }

@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { unlink } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { getPayload } from 'payload'
 import config from '../src/payload.config'
+import { blobPath } from '../src/modules/decks/adapters/files/blob-store'
 import { chooseHandle, createDeck } from '../src/modules/decks/server'
 import { deckJson, editionArchive, MEDIA, sha256 } from './support/deck-archive'
 import { present } from './support/present'
@@ -62,9 +64,11 @@ function assertBareError(answer: Awaited<ReturnType<typeof get>>, status: number
   assert.ok(!/\bat .+\.(js|ts):\d+/.test(answer.text), answer.text)
   assert.ok(!/html/i.test(answer.headers.get('content-type') ?? ''), path)
   assert.equal(answer.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(answer.headers.get('content-security-policy'), CSP, path)
+  assert.equal(answer.headers.get('cache-control'), 'no-store', path)
 }
 
-const CSP = "default-src 'none'; sandbox"
+const CSP = "default-src 'none'; frame-ancestors 'none'; sandbox"
 const SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>',
 )
@@ -206,6 +210,7 @@ try {
         assert.equal(answer.body.length, 0)
         assert.equal(answer.headers.get('etag'), etag)
         assert.equal(answer.headers.get('cache-control'), cache)
+        assert.equal(answer.headers.get('content-security-policy'), CSP)
       }
       const other = await get(path, { 'If-None-Match': `"${'0'.repeat(64)}"` })
       assert.equal(other.status, 200, path)
@@ -231,12 +236,15 @@ try {
       `${base}/en`,
       `${base}/en/media`,
       '/d/FRANK/verbs/index.json',
+      '/d',
+      '/d/frank',
+      '/d/frank/verbs',
       '/d/frank/Verbs/index.json',
     ])
       assertBareError(await get(path), 404, path)
     // Malformed percent-encoding: Next.js refuses it before the route (a bare text error).
     const malformed = await get(`${base}/en/media/%E0%A4%A`)
-    assert.ok(malformed.status >= 400, String(malformed.status))
+    assert.equal(malformed.status, 500)
     assert.ok(malformed.body.length <= 64 && !malformed.text.includes(dataDir), malformed.text)
     assert.ok(!/html/i.test(malformed.headers.get('content-type') ?? ''))
     // `..` percent-encoded is resolved by the URL parser to `<base>/en/`, which Next.js redirects
@@ -295,6 +303,49 @@ try {
     assert.equal(empty.status, 200, empty.text)
     assert.equal(empty.text, indexOf())
     assertBareError(await get('/d/grace/idioms/en/deck.json'), 404, 'no edition')
+  }
+
+  // An edition listing many files: each media file is looked up by its own key (the store never
+  // loads the whole file map); a blob lost from the disk is a bare 500 that names no path.
+  {
+    const heidi = await author('heidi', 'many')
+    const count = 1500
+    const files = Array.from({ length: count }, (_, i) => ({
+      name: `m${String(i).padStart(4, '0')}.txt`,
+      body: Buffer.from(`media file number ${i}`),
+    }))
+    const base = deckJson({ id: 'many', version: '2026-11-26-many' })
+    const many = {
+      ...base,
+      media: [
+        ...base.media,
+        ...files.map((file) => ({
+          filename: file.name,
+          sha256: sha256(file.body),
+          size: file.body.length,
+        })),
+      ],
+    }
+    await publish(
+      'en',
+      await editionArchive(
+        many,
+        files.map((file) => ({ name: `media/${file.name}`, body: file.body })),
+      ),
+      heidi.token,
+    )
+    for (const i of [0, 777, count - 1]) {
+      const file = present(files[i])
+      const answer = await get(`/d/heidi/many/en/media/${file.name}`)
+      assert.equal(answer.status, 200, answer.text)
+      assert.ok(answer.body.equals(file.body))
+      assert.equal(answer.headers.get('content-type'), 'text/plain; charset=utf-8')
+    }
+    assertBareError(await get('/d/heidi/many/en/media/m9999.txt'), 404, 'many: missing')
+
+    const lost = present(files[42])
+    await unlink(blobPath(dataDir, sha256(lost.body)))
+    assertBareError(await get(`/d/heidi/many/en/media/${lost.name}`), 500, 'lost blob')
   }
 
   // Hidden: 410 everywhere.

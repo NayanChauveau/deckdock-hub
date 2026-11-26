@@ -74,7 +74,12 @@ export default withPayload({
       // own, so the media policy is set here: an SVG or HTML file of a deck never runs.
       {
         source: '/d/:path*',
-        headers: [{ key: 'Content-Security-Policy', value: "default-src 'none'; sandbox" }],
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'none'; frame-ancestors 'none'; sandbox",
+          },
+        ],
       },
       {
         source: '/:locale/commande/acces',

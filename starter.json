@@ -118,7 +118,7 @@
       "files": [
         "src/modules/decks/**",
         "src/app/(frontend)/api/publish/[edition]/route.ts",
-        "src/app/(frontend)/d/[handle]/[deck]/[...path]/route.ts",
+        "src/app/(frontend)/d/[[...path]]/route.ts",
         "tests/decks.addon.test.py",
         "tests/decks.domain.test.ts",
         "tests/decks.files.test.ts",

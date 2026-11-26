@@ -12,7 +12,7 @@ import { contentDisposition, etagMatches, etagOf, mediaType } from './serve-head
  * Nothing served here may run, load or be framed, whatever its type (an SVG with a script). Also
  * set for `/d/:path*` in next.config.mjs, whose headers take precedence over a route's.
  */
-const CSP = "default-src 'none'; sandbox"
+const CSP = "default-src 'none'; frame-ancestors 'none'; sandbox"
 const SHORT = 'public, max-age=300'
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 const always = { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP }

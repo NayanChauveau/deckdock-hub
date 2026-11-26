@@ -151,9 +151,11 @@ function fakeStore(
         version: latest.version,
       }))
     },
-    async latestFiles(deck, edition) {
-      calls.push(`files:${deck}/${edition}`)
-      return editions[edition]?.files ?? null
+    // One key at a time, as the Postgres adapter reads it (`files -> key`): never the map.
+    async latestFile(deck, edition, key) {
+      calls.push(`file:${deck}/${edition}/${key}`)
+      const map = editions[edition]?.files
+      return map && Object.hasOwn(map, key) ? (map[key] ?? null) : null
     },
   }
   return { store, calls }
@@ -165,7 +167,7 @@ const files = {
 const deps = (store: ServeStore): ServeDeps => ({ store, hash })
 
 void test('serving: index.json with its hash, deck.json and media by their stored digest', async () => {
-  const { store } = fakeStore('approved', {
+  const { store, calls } = fakeStore('approved', {
     fr: { version: 'v2', files },
     en: { version: 'v1', files },
   })
@@ -208,6 +210,11 @@ void test('serving: index.json with its hash, deck.json and media by their store
     size: 9,
     noindex: false,
   })
+  // deck.json and the media file were each asked for by their own key.
+  assert.deepEqual(
+    calls.filter((call) => call.startsWith('file:')),
+    ['file:7/en/deck.json', 'file:7/en/media/a b.png'],
+  )
 })
 
 void test('serving: pending is noindex, hidden is gone, anything unknown is missing', async () => {
