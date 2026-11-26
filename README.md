@@ -122,13 +122,14 @@ construit à partir de la dernière version de chaque édition, trié par éditi
   principale des langues des éditions.
 - **Page de deck** `/{fr,en}/d/<pseudo>/<deck-id>?edition=` : licence, page d’accueil, éditions et
   leurs adresses à copier, nombre de notes, dernière version, description Markdown (rendue en
-  éléments React, jamais en HTML de l’auteur), aperçu et historique. Deck en attente : 404 sauf
+  éléments React, jamais en HTML de l’auteur, lecture linéaire, coupée à 20 000 caractères), aperçu et historique. Deck en attente : 404 sauf
   pour son auteur. Deck masqué : page « Deck retiré », avec le statut 404 (une page Next.js ne peut
   pas répondre 410 ; les adresses `/d/…` du plugin répondent bien 410).
 - **Aperçu** : 5 notes au plus (une par type de note d’abord), choisies à la publication et
   gardées dans `versions.preview`. Chaque face est un document à part,
   `/preview/<pseudo>/<deck-id>/<édition>/<n>/<front|back>`, servi avec la CSP
-  `default-src 'none'; img-src <origine>; media-src <origine>; style-src 'unsafe-inline'; sandbox allow-scripts; frame-ancestors 'self'`
+  `default-src 'none'; img-src <base>/<édition>/media/; media-src <base>/<édition>/media/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors 'self'`
+  (répétée sans `sandbox` dans un `<meta>` en tête du document, avec `lang` et `<title>`)
   et affiché dans `<iframe sandbox="allow-scripts">` : le HTML et le JavaScript des cartes
   tournent dans une origine opaque, sans accès aux cookies ni aux pages du site. Faute de
   `script-src`, cette CSP bloque en fait les scripts des cartes. `next.config.mjs` exclut

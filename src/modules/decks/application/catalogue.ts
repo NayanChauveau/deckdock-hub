@@ -277,16 +277,21 @@ export async function previewCard(
   const notetype = preview?.notetypes.find((candidate) => candidate.id === note?.notetype)
   if (!preview || !note || !notetype) return missing
   const origin = deps.origin.replace(/\/+$/, '')
+  const mediaBase = `${origin}${servePath(input.handle, input.deckId, input.edition, 'media')}/`
   const listed = new Set(preview.media)
   const media = (name: string) =>
     listed.has(name)
       ? `${origin}${servePath(input.handle, input.deckId, input.edition, 'media', name)}`
       : ''
-  const html = cardDocument(notetype, renderCard(notetype, note, 0, input.side, media), media)
+  const html = cardDocument(notetype, renderCard(notetype, note, 0, input.side, media), media, {
+    mediaBase,
+    lang: preview.language,
+    title: notetype.name,
+  })
   return {
     kind: 'card',
     html,
-    csp: previewCSP(origin),
+    csp: previewCSP(mediaBase),
     public: deck.status === 'approved',
   }
 }

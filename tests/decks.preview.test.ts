@@ -10,8 +10,19 @@ import {
   type CatalogueStore,
   type PublicEdition,
 } from '../src/modules/decks/application/catalogue'
-import { cardDocument, previewCSP, renderCard } from '../src/modules/decks/application/preview'
-import { parseMarkdown } from '../src/modules/decks/domain/markdown'
+import {
+  cardDocument,
+  previewCSP,
+  previewMetaCSP,
+  renderCard,
+} from '../src/modules/decks/application/preview'
+import {
+  MAX_DESCRIPTION_CHARS,
+  MAX_SUMMARY_SOURCE_CHARS,
+  markdownText,
+  parseMarkdown,
+  truncateDescription,
+} from '../src/modules/decks/domain/markdown'
 import {
   mediaReferences,
   parsePreview,
@@ -160,22 +171,79 @@ void test('renderCard: media references become the hub URLs; unknown names are d
   )
 })
 
+const MEDIA_BASE = 'https://hub.test/d/alice/verbs/en/media/'
+
 void test('cardDocument: the notetype CSS (media rewritten) and the card in one document', () => {
-  const doc = cardDocument(basic, '<p>go</p>', media)
-  assert.ok(doc.startsWith('<!doctype html>'))
+  const doc = cardDocument(basic, '<p>go</p>', media, {
+    mediaBase: MEDIA_BASE,
+    lang: 'en-GB',
+    title: 'Basic <1>',
+  })
+  // The policy (without sandbox, which a meta cannot set) is the head's first element: scripts stay
+  // blocked even if the header were lost.
+  assert.ok(
+    doc.startsWith(
+      `<!doctype html><html lang="en-GB"><head><meta http-equiv="Content-Security-Policy" content="${previewMetaCSP(MEDIA_BASE)}">`,
+    ),
+    doc.slice(0, 300),
+  )
   assert.ok(doc.includes('<meta charset="utf-8">'))
+  assert.ok(doc.includes('<title>Basic &lt;1&gt;</title>'))
   assert.ok(doc.includes('url("https://hub.test/d/alice/verbs/en/media/bg.png")'))
   assert.ok(doc.includes('url("")'))
   assert.ok(doc.includes('<body class="card"><p>go</p></body>'))
+  // A language that is not a language tag is left out; </style can never close the style element.
+  const odd = cardDocument(
+    { ...basic, css: 'a { content: "</STYLE><script>x()</script>" }' },
+    '',
+    media,
+    { mediaBase: MEDIA_BASE, lang: 'en" onload="x', title: 't' },
+  )
+  assert.ok(odd.startsWith('<!doctype html><html><head>'))
+  assert.equal((odd.match(/<\/style/gi) ?? []).length, 1, 'only the real closing tag')
+  assert.ok(odd.includes('<\\/STYLE>'))
 })
 
-void test('previewCSP: the brief policy, sandboxed scripts without allow-same-origin', () => {
-  const policy = previewCSP('https://hub.test')
+void test('previewCSP: the brief policy tightened, sandboxed scripts without allow-same-origin', () => {
+  const policy = previewCSP(MEDIA_BASE)
   assert.equal(
     policy,
-    "default-src 'none'; img-src https://hub.test; media-src https://hub.test; style-src 'unsafe-inline'; sandbox allow-scripts; frame-ancestors 'self'",
+    "default-src 'none'; img-src https://hub.test/d/alice/verbs/en/media/; media-src https://hub.test/d/alice/verbs/en/media/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors 'self'",
   )
   assert.ok(!policy.includes('allow-same-origin'))
+  assert.equal(
+    previewMetaCSP(MEDIA_BASE),
+    "default-src 'none'; img-src https://hub.test/d/alice/verbs/en/media/; media-src https://hub.test/d/alice/verbs/en/media/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+  )
+})
+
+void test('previewOf: an oversized notetype (CSS or template) is left out with its notes', () => {
+  const huge = 'x'.repeat(200_001)
+  const deck = {
+    deck: { language: ['fr', 'en'] },
+    notetypes: [
+      { ...basic, id: 'big-css', css: huge },
+      { ...basic, id: 'big-tpl', templates: [{ name: 'c', front: huge, back: '' }] },
+      { ...basic, id: 'ok' },
+    ],
+    notes: [
+      { notetype: 'big-css', fields: { Front: '1' }, tags: [] },
+      { notetype: 'big-tpl', fields: { Front: '2' }, tags: [] },
+      { notetype: 'ok', fields: { Front: '3' }, tags: [] },
+    ],
+    media: [],
+  }
+  const preview = previewOf(deck)
+  assert.deepEqual(
+    preview.notetypes.map((n) => n.id),
+    ['ok'],
+  )
+  assert.deepEqual(
+    preview.notes.map((n) => n.fields['Front']),
+    ['3'],
+  )
+  // The edition's first language, for the document's lang.
+  assert.equal(preview.language, 'fr')
 })
 
 void test('previewOf: at most 5 notes, one per notetype first, then in file order', () => {
@@ -481,7 +549,8 @@ void test('preview card: an approved deck’s card in its document, public; othe
       '<div><img src="https://hub.test/d/alice/verbs/en/media/a.png"></div><hr id=answer>b',
     ),
   )
-  assert.equal(card.csp, previewCSP('https://hub.test'))
+  assert.equal(card.csp, previewCSP(MEDIA_BASE))
+  assert.ok(card.html.includes(previewMetaCSP(MEDIA_BASE)))
   const base = {
     handle: 'alice',
     deckId: 'verbs',
@@ -538,4 +607,45 @@ void test('robots.txt: the add-on files and the card previews are never crawled'
     if (previous === undefined) delete env['PUBLIC_INDEXING']
     else env['PUBLIC_INDEXING'] = previous
   }
+})
+
+void test('markdown: pathological 200 KB inputs parse in linear time', () => {
+  const size = 200_000
+  const inputs = [
+    '[a '.repeat(size / 3),
+    '[a](b '.repeat(size / 6),
+    '[a]('.repeat(size / 4),
+    '**a '.repeat(size / 4),
+    '__a '.repeat(size / 4),
+    '*a '.repeat(size / 3),
+    '_a '.repeat(size / 3),
+    '`a '.repeat(size / 3),
+    '*'.repeat(size),
+    '[['.repeat(size / 2) + ']',
+    `# ${' '.repeat(size)}x`,
+    `- ${' '.repeat(size)}x`,
+    '> '.repeat(size / 2),
+  ]
+  for (const input of inputs) {
+    const start = performance.now()
+    const blocks = parseMarkdown(input)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < 200, `${JSON.stringify(input.slice(0, 8))}: ${elapsed.toFixed(0)} ms`)
+    assert.ok(blocks.length >= 1)
+  }
+  // Text without a construct comes back whole.
+  const plain = '[a '.repeat(500)
+  assert.equal(markdownText(plain), plain.trim())
+  // Nesting stays readable past its depth limit, as text.
+  assert.equal(markdownText('**a *b [c](https://x.test) d* e**'), 'a b c d e')
+})
+
+void test('markdown: descriptions are capped for summaries and for the deck page', () => {
+  assert.equal(MAX_SUMMARY_SOURCE_CHARS, 2_000)
+  assert.equal(MAX_DESCRIPTION_CHARS, 20_000)
+  assert.ok(markdownText('word '.repeat(10_000)).length <= MAX_SUMMARY_SOURCE_CHARS)
+  assert.deepEqual(truncateDescription('short'), { text: 'short', truncated: false })
+  const long = truncateDescription('x'.repeat(30_000))
+  assert.equal(long.truncated, true)
+  assert.equal(long.text.length, MAX_DESCRIPTION_CHARS)
 })

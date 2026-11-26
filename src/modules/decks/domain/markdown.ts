@@ -20,42 +20,119 @@ export type Block =
 /** A link target kept as a link; anything else (javascript:, data:, relative) becomes text. */
 export const isSafeHref = (href: string): boolean => /^(https?:\/\/|mailto:)/i.test(href)
 
-// Inline constructs, tried at each position in this order.
-const INLINE: [RegExp, (match: RegExpExecArray) => Inline[]][] = [
-  [/^`([^`]+)`/, (m) => [{ kind: 'code', text: m[1] ?? '' }]],
-  [
-    /^\[([^\]]*)\]\(([^)\s]*)\)/,
-    (m) => {
-      const content = parseInline(m[1] ?? '')
-      const href = m[2] ?? ''
-      return isSafeHref(href) ? [{ kind: 'link', href, content }] : content
-    },
-  ],
-  [/^\*\*(?=\S)([\s\S]*?\S)\*\*/, (m) => [{ kind: 'strong', content: parseInline(m[1] ?? '') }]],
-  [/^__(?=\S)([\s\S]*?\S)__/, (m) => [{ kind: 'strong', content: parseInline(m[1] ?? '') }]],
-  [/^\*(?=\S)([\s\S]*?\S)\*/, (m) => [{ kind: 'em', content: parseInline(m[1] ?? '') }]],
-  [
-    /^_(?=\S)([\s\S]*?\S)_(?![A-Za-z0-9])/,
-    (m) => [{ kind: 'em', content: parseInline(m[1] ?? '') }],
-  ],
-]
+/** Longest description rendered on a deck page; the rest is cut, with a note. */
+export const MAX_DESCRIPTION_CHARS = 20_000
+/** Longest part of a description read for a summary or a meta description. */
+export const MAX_SUMMARY_SOURCE_CHARS = 2_000
+/** Marks nested deeper than this are kept as their text. */
+const MAX_DEPTH = 4
 
-export function parseInline(text: string): Inline[] {
+/** A description cut to `max` characters, and whether it was. */
+export function truncateDescription(
+  source: string,
+  max = MAX_DESCRIPTION_CHARS,
+): { text: string; truncated: boolean } {
+  return source.length > max
+    ? { text: source.slice(0, max), truncated: true }
+    : { text: source, truncated: false }
+}
+
+const isSpace = (char: string | undefined) => char === undefined || /\s/.test(char)
+const isWordChar = (char: string | undefined) => char !== undefined && /[A-Za-z0-9]/.test(char)
+
+/**
+ * Finds closing delimiters in one text, forward only. A search is remembered per delimiter: the
+ * next search from a later position reuses it when the remembered closer is still ahead, so each
+ * delimiter scans the text once whatever the input (no quadratic rescans).
+ */
+function closers(text: string) {
+  const memo = new Map<string, { from: number; at: number }>()
+  return (needle: string, from: number, valid: (at: number) => boolean = () => true): number => {
+    const known = memo.get(needle)
+    if (known && known.from <= from && (known.at === -1 || known.at >= from)) return known.at
+    let at = text.indexOf(needle, from)
+    while (at !== -1 && !valid(at)) at = text.indexOf(needle, at + 1)
+    memo.set(needle, { from, at })
+    return at
+  }
+}
+
+/**
+ * Inline marks: `code`, [links](https://…), **strong**, __strong__, *em*, _em_. One pass over the
+ * text; each closing delimiter is found from the current position and never searched again.
+ */
+export function parseInline(text: string, depth = 0): Inline[] {
+  if (depth > MAX_DEPTH) return text ? [{ kind: 'text', text }] : []
   const out: Inline[] = []
+  const next = closers(text)
+  // The next whitespace from a position, remembered like the closers.
+  let spaceFrom = -1
+  let spaceAt = -1
+  const nextSpace = (from: number): number => {
+    if (spaceFrom !== -1 && spaceFrom <= from && (spaceAt === -1 || spaceAt >= from)) return spaceAt
+    let at = from
+    while (at < text.length && !isSpace(text[at])) at++
+    spaceFrom = from
+    spaceAt = at < text.length ? at : -1
+    return spaceAt
+  }
+  // A link's verdict by its closing bracket: many `[` may share one `]`.
+  const links = new Map<number, number>()
+  const inner = (from: number, to: number) => parseInline(text.slice(from, to), depth + 1)
   let pending = ''
   let i = 0
-  outer: while (i < text.length) {
+  const emit = (nodes: Inline[], to: number) => {
+    if (pending) out.push({ kind: 'text', text: pending })
+    pending = ''
+    out.push(...nodes)
+    i = to
+  }
+  while (i < text.length) {
     const char = text[i] ?? ''
-    if ('`[*_'.includes(char)) {
-      const rest = text.slice(i)
-      for (const [pattern, build] of INLINE) {
-        const match = pattern.exec(rest)
-        if (!match) continue
-        if (pending) out.push({ kind: 'text', text: pending })
-        pending = ''
-        out.push(...build(match))
-        i += match[0].length
-        continue outer
+    if (char === '`') {
+      const close = next('`', i + 1)
+      if (close > i + 1) {
+        emit([{ kind: 'code', text: text.slice(i + 1, close) }], close + 1)
+        continue
+      }
+    } else if (char === '[') {
+      const bracket = next(']', i + 1)
+      if (bracket !== -1) {
+        let paren = links.get(bracket)
+        if (paren === undefined) {
+          paren = -1
+          if (text[bracket + 1] === '(') {
+            // Both searches are remembered: many links may share one `)` or one space.
+            const close = next(')', bracket + 2)
+            const space = nextSpace(bracket + 2)
+            if (close !== -1 && (space === -1 || space > close)) paren = close
+          }
+          links.set(bracket, paren)
+        }
+        if (paren !== -1) {
+          const href = text.slice(bracket + 2, paren)
+          const content = inner(i + 1, bracket)
+          emit(isSafeHref(href) ? [{ kind: 'link', href, content }] : content, paren + 1)
+          continue
+        }
+      }
+    } else if (char === '*' || char === '_') {
+      const double = text[i + 1] === char
+      const mark = double ? char + char : char
+      const open = i + mark.length
+      if (!isSpace(text[open])) {
+        const close = next(
+          mark,
+          open + 1,
+          (at) =>
+            !isSpace(text[at - 1]) &&
+            (char === '*' || double || !isWordChar(text[at + mark.length])),
+        )
+        if (close !== -1) {
+          const content = inner(open, close)
+          emit([{ kind: double ? 'strong' : 'em', content }], close + mark.length)
+          continue
+        }
       }
     }
     pending += char
@@ -65,10 +142,17 @@ export function parseInline(text: string): Inline[] {
   return out
 }
 
-const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/
+const HEADING = /^(#{1,6})\s+(.*)$/
 const BULLET = /^\s*[-*+]\s+(.*)$/
 const NUMBERED = /^\s*\d{1,9}[.)]\s+(.*)$/
 const FENCE = /^\s*(```|~~~)/
+
+/** A heading's text without its optional closing `#`s and trailing spaces (a linear scan). */
+function trimClosingHashes(text: string): string {
+  let end = text.length
+  while (end > 0 && (text[end - 1] === '#' || isSpace(text[end - 1]))) end--
+  return text.slice(0, end)
+}
 
 /** The blocks of a Markdown text; joined lines of a paragraph are separated by a space. */
 export function parseMarkdown(markdown: string): Block[] {
@@ -95,7 +179,11 @@ export function parseMarkdown(markdown: string): Block[] {
     const heading = HEADING.exec(line)
     if (heading) {
       const level = Math.min(6, (heading[1] ?? '#').length) as 1 | 2 | 3 | 4 | 5 | 6
-      blocks.push({ kind: 'heading', level, content: parseInline(heading[2] ?? '') })
+      blocks.push({
+        kind: 'heading',
+        level,
+        content: parseInline(trimClosingHashes(heading[2] ?? '')),
+      })
       i++
       continue
     }
@@ -136,7 +224,7 @@ const inlineText = (content: Inline[]): string =>
 
 /** The text of a Markdown description without its marks (lists, summaries, meta descriptions). */
 export function markdownText(markdown: string): string {
-  return parseMarkdown(markdown)
+  return parseMarkdown(markdown.slice(0, MAX_SUMMARY_SOURCE_CHARS))
     .map((block) =>
       block.kind === 'codeblock'
         ? block.text

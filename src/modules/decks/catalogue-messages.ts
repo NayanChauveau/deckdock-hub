@@ -35,6 +35,7 @@ const fr = {
     languages: 'Langues',
     none: 'Non précisée',
     description: 'Description',
+    descriptionTruncated: 'Description abrégée : la suite est dans le dépôt du deck.',
     editionsTitle: 'Éditions',
     editionsIntro:
       'Pour suivre une édition, copiez son adresse et collez-la dans le plugin DeckDock d’Anki.',
@@ -100,6 +101,7 @@ const en: CatalogueMessages = {
     languages: 'Languages',
     none: 'Not given',
     description: 'Description',
+    descriptionTruncated: 'Description shortened: the rest is in the deck’s repository.',
     editionsTitle: 'Editions',
     editionsIntro:
       'To follow an edition, copy its address and paste it into the DeckDock add-on in Anki.',
