@@ -25,6 +25,7 @@ import { StrikethroughFeatureClient as StrikethroughFeatureClient_e70f5e05f09f93
 import { UnderlineFeatureClient as UnderlineFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { BoldFeatureClient as BoldFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { ItalicFeatureClient as ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
+import { PendingDecks as PendingDecks_4e09c84f00ccbc2bffe0779d26f46844 } from '../../../modules/decks/admin/PendingDecks'
 import { AdminGuard as AdminGuard_f2164911d5bd8956acc6337bff29184b } from '../../../core/admin/components/AdminGuard'
 import { TotpGate as TotpGate_9f66444e5bab624adefc7e6de73e889e } from '../../../core/admin/components/TotpGate'
 import { TOTPSetup as TOTPSetup_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc'
@@ -61,6 +62,7 @@ export const importMap = {
   "@payloadcms/richtext-lexical/client#UnderlineFeatureClient": UnderlineFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "@payloadcms/richtext-lexical/client#BoldFeatureClient": BoldFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "@payloadcms/richtext-lexical/client#ItalicFeatureClient": ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
+  "/modules/decks/admin/PendingDecks#PendingDecks": PendingDecks_4e09c84f00ccbc2bffe0779d26f46844,
   "/core/admin/components/AdminGuard#AdminGuard": AdminGuard_f2164911d5bd8956acc6337bff29184b,
   "/core/admin/components/TotpGate#TotpGate": TotpGate_9f66444e5bab624adefc7e6de73e889e,
   "payload-totp/rsc#TOTPSetup": TOTPSetup_4eaf6cb33cfb75be01716613e3c9a512,

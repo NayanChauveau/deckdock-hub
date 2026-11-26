@@ -485,6 +485,10 @@ try {
         DEMO_ORDER_FILE: join(directory, 'browser-order.json'),
         // The visitor emails of the account journey (tests/e2e/accounts.spec.ts); development server.
         ACCOUNTS_TEST_MAILBOX: join(directory, 'browser-mailbox.jsonl'),
+        // The author journey publishes through the API (tests/e2e/decks-author.spec.ts).
+        ...(existsSync('tests/e2e/decks-author.spec.ts')
+          ? { HUB_PYTHON: await hubPython(), PYTHONPATH: resolve('vendor/deckdock') }
+          : {}),
       }
       // The demo order of the order journey (tests/e2e/orders.spec.ts), while orders is kept.
       if (existsSync('src/scripts/commerce-demo.ts'))

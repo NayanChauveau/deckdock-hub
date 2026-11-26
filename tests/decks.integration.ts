@@ -179,13 +179,14 @@ try {
   )
 
   // A verified administrator reviews: transitions of the domain, approval date recorded.
+  const adminPassword = randomBytes(24).toString('hex')
   const adminDoc = await payload.create({
     collection: 'users',
     data: {
       email: `admin-${randomBytes(4).toString('hex')}@example.test`,
       name: 'Admin',
       role: 'admin',
-      password: randomBytes(24).toString('hex'),
+      password: adminPassword,
     },
   })
   const admin = { ...adminDoc, collection: 'users' as const }
@@ -320,6 +321,41 @@ try {
     (await pendingDecks(payload)).map((deck) => `${deck.handle}/${deck.deckId}`),
     ['bob/verbs'],
   )
+
+  // The review endpoints: verified administrators only (payload-totp is off in this run, so a
+  // password session counts as verified, as for the rest of the admin here).
+  const refused = await api(`/decks/${bobDeck.id}/approve`, { cookie: bob.cookie, method: 'POST' })
+  assert.equal(refused.status, 403, 'a visitor, even the owner, cannot approve')
+  assert.equal((await api(`/decks/${bobDeck.id}/approve`, { method: 'POST' })).status, 403)
+  const login = await api('/users/login', {
+    method: 'POST',
+    body: { email: adminDoc.email, password: adminPassword },
+  })
+  const adminToken = field(login.json, 'token')
+  assert.equal(typeof adminToken, 'string', 'administrator signed in')
+  const adminCookie = `payload-token=${String(adminToken)}`
+  const noReason = await api(`/decks/${bobDeck.id}/hide`, {
+    cookie: adminCookie,
+    method: 'POST',
+    body: { reason: ' ' },
+  })
+  assert.equal(noReason.status, 400)
+  assert.equal(field(noReason.json, 'code'), 'reason_required')
+  const hiddenByAdmin = await api(`/decks/${bobDeck.id}/hide`, {
+    cookie: adminCookie,
+    method: 'POST',
+    body: { reason: 'Doublon' },
+  })
+  assert.deepEqual(hiddenByAdmin.json, { ok: true, status: 'hidden' })
+  assert.equal(
+    (await api('/decks/999999/approve', { cookie: adminCookie, method: 'POST' })).status,
+    404,
+  )
+  const restoredByAdmin = await api(`/decks/${bobDeck.id}/approve`, {
+    cookie: adminCookie,
+    method: 'POST',
+  })
+  assert.deepEqual(restoredByAdmin.json, { ok: true, status: 'approved' })
 
   // Account deletion (any path through Payload): decks hidden, tokens revoked, handle reserved.
   const carol = await visitor()

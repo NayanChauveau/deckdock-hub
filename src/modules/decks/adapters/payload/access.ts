@@ -4,8 +4,10 @@ import { isAdmin } from '@/core/payload/access'
 export const never = () => false
 
 /** The signed-in visitor's `customers` id, or null (an administrator, or nobody). */
-export function visitorId(req: PayloadRequest): number | null {
-  const user: unknown = req.user
+export const visitorId = (req: PayloadRequest): number | null => customerIdOf(req.user)
+
+/** The `customers` id of an authenticated user, or null for any other user (or none). */
+export function customerIdOf(user: unknown): number | null {
   if (typeof user !== 'object' || user === null) return null
   if (!('collection' in user) || user.collection !== 'customers' || !('id' in user)) return null
   return typeof user.id === 'number' ? user.id : null
