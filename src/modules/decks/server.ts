@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import type { Upload } from './adapters/files/workspace'
 import * as authorSpaceUseCases from './application/author-space'
+import type { AuthorDeckSummary } from './application/author-space'
 import * as catalogueUseCases from './application/catalogue'
 import type {
   CatalogueCard,
@@ -19,6 +20,7 @@ import { catalogueDeps, decksDeps, publishDeps, serveDeps } from './composition'
 import type { Author, Deck, EditionHistory, PendingDeck, RecordId } from './domain/model'
 
 export { DecksError, type DecksErrorCode } from './domain/errors'
+export type { AuthorDeckSummary } from './application/author-space'
 export type {
   Author,
   Deck,
@@ -74,6 +76,19 @@ export const authorSpace = (
   customerId: RecordId,
 ): Promise<{ author: Author | null; decks: Deck[] }> =>
   authorSpaceUseCases.authorSpace(decksDeps(payload), customerId)
+/** The author's decks as the author space lists them, named for a reader of `locale`. */
+export const authorDeckSummaries = (
+  payload: Payload,
+  decks: readonly Deck[],
+  locale: string,
+): Promise<AuthorDeckSummary[]> => {
+  const { store } = catalogueDeps(payload)
+  return Promise.all(
+    decks.map(async (deck) =>
+      authorSpaceUseCases.summarizeDeck(deck, await store.editions(deck.id), locale),
+    ),
+  )
+}
 /** One of the customer's decks with its editions and received versions (`not_found` otherwise). */
 export const authorDeck = (
   payload: Payload,

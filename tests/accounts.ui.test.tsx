@@ -164,3 +164,26 @@ void test('my account links to the pages other modules add', () => {
   assert.equal(nav.querySelector('a')?.getAttribute('href'), '/en/compte/decks')
   assert.ok(screen.getByRole('link', { name: 'My decks' }))
 })
+
+void test('the sign-in card says an account is created on the first sign-in', () => {
+  const t = accountMessages.fr.signIn
+  recordFetch()
+  render(<SignInForm locale="fr" />)
+  assert.ok(screen.getByText(t.firstTime))
+})
+
+void test('once the link is sent, the card says to check the inbox, and another address can be used', async () => {
+  const t = accountMessages.en.signIn
+  const calls = recordFetch()
+  render(<SignInForm locale="en" />)
+  fireEvent.change(screen.getByLabelText(t.email), { target: { value: 'visitor@example.test' } })
+  fireEvent.click(screen.getByRole('button', { name: t.submit }))
+  assert.equal((await screen.findByRole('status')).textContent, t.sent)
+  const heading = screen.getByRole('heading', { level: 2, name: t.sentTitle })
+  assert.equal(document.activeElement, heading, 'focus moves to the new state')
+  assert.equal(screen.queryByLabelText(t.email), null, 'the form gives way to the sent state')
+  fireEvent.click(screen.getByRole('button', { name: t.otherAddress }))
+  assert.equal(screen.getByLabelText<HTMLInputElement>(t.email).value, 'visitor@example.test')
+  assert.equal(screen.queryByRole('status'), null)
+  assert.equal(posts(calls).length, 1)
+})

@@ -1,5 +1,5 @@
 'use client'
-import { useId, useState, type SyntheticEvent } from 'react'
+import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react'
 import type { Locale } from '@/core/i18n/locales'
 import { Button } from '@/core/ui/button'
 import { Notice } from '@/core/ui/feedback/Notice'
@@ -11,7 +11,8 @@ type Outcome = 'sent' | 'tooMany' | 'error' | null
 
 /**
  * Asks Better Auth for a magic link. The answer is the same whether or not the address has an
- * account, and so is the message shown.
+ * account, and so is the message shown: once sent, the form gives way to « check your inbox »
+ * (focus moves there), with a way back to the form for another address.
  */
 export function SignInForm({ locale }: { locale: Locale }) {
   const t = accountMessages[locale].signIn
@@ -20,6 +21,10 @@ export function SignInForm({ locale }: { locale: Locale }) {
   const [invalid, setInvalid] = useState(false)
   const [busy, setBusy] = useState(false)
   const [outcome, setOutcome] = useState<Outcome>(null)
+  const sentHeading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (outcome === 'sent') sentHeading.current?.focus()
+  }, [outcome])
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -45,8 +50,29 @@ export function SignInForm({ locale }: { locale: Locale }) {
     }
   }
 
+  if (outcome === 'sent')
+    return (
+      <div className="flex flex-col gap-4">
+        <h2 ref={sentHeading} tabIndex={-1} className="text-lg font-semibold outline-none">
+          {t.sentTitle}
+        </h2>
+        <Notice>{t.sent}</Notice>
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setOutcome(null)
+            }}
+          >
+            {t.otherAddress}
+          </Button>
+        </div>
+      </div>
+    )
+
   return (
-    <form className="flex flex-col gap-6" noValidate onSubmit={(event) => void submit(event)}>
+    <form className="flex flex-col gap-5" noValidate onSubmit={(event) => void submit(event)}>
       <TextField
         id={`${id}-email`}
         name="email"
@@ -61,13 +87,11 @@ export function SignInForm({ locale }: { locale: Locale }) {
           setEmail(event.target.value)
         }}
       />
-      <div>
-        <Button type="submit" size="lg" disabled={busy}>
-          {busy ? t.busy : t.submit}
-        </Button>
-      </div>
-      {outcome === 'sent' && <Notice>{t.sent}</Notice>}
+      <Button type="submit" size="lg" disabled={busy} className="w-full">
+        {busy ? t.busy : t.submit}
+      </Button>
       {(outcome === 'tooMany' || outcome === 'error') && <Notice tone="error">{t[outcome]}</Notice>}
+      <p className="text-center text-xs text-muted-foreground">{t.firstTime}</p>
     </form>
   )
 }

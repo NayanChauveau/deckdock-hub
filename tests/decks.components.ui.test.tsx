@@ -79,3 +79,20 @@ void test('StatusBadge names each status', () => {
     unmount()
   }
 })
+
+void test('StatusBadge shows the reason of a hidden deck, and only of a hidden one', () => {
+  const hidden = render(
+    <StatusBadge
+      status="hidden"
+      label="Masqué"
+      reason="Contenu en double"
+      reasonLabel="Motif :"
+      testId="s"
+    />,
+  )
+  assert.equal(screen.getByTestId('s').textContent, 'Masqué')
+  assert.ok(hidden.container.textContent.includes('Motif : Contenu en double'))
+  hidden.unmount()
+  const approved = render(<StatusBadge status="approved" label="Publié" reason="ignored" />)
+  assert.equal(approved.container.textContent, 'Publié')
+})

@@ -27,15 +27,23 @@ export function DeckEditions({
   const address = (edition: string) => editionAddress(origin, handle, deckId, edition)
   const addressPattern = `${origin.replace(/\/+$/, '')}${servePath(handle, deckId)}/<edition>/`
   return (
-    <section aria-labelledby="deck-editions" className="flex flex-col gap-4">
-      <h2 id="deck-editions">{t.editionsTitle}</h2>
+    <section
+      aria-labelledby="deck-editions"
+      className="flex min-w-0 flex-col gap-4 rounded-[var(--radius)] bg-card p-5 text-sm text-card-foreground shadow-[var(--shadow-card)]"
+    >
+      <h2 id="deck-editions" className="text-base font-semibold">
+        {t.editionsTitle}
+      </h2>
       {editions.length ? (
         editions.map((edition) => (
-          <div key={edition.code} className="flex flex-col gap-3">
-            <h3>{edition.code}</h3>
-            <p>{t.testAddress}</p>
+          <div
+            key={edition.code}
+            className="flex min-w-0 flex-col gap-3 border-t border-border pt-4 first-of-type:border-t-0 first-of-type:pt-0"
+          >
+            <h3 className="font-semibold wrap-anywhere">{edition.code}</h3>
+            <p className="text-muted-foreground">{t.testAddress}</p>
             <p>
-              <code className="break-all">{address(edition.code)}</code>
+              <code className="font-mono break-all">{address(edition.code)}</code>
             </p>
             <CopyButton
               value={address(edition.code)}
@@ -44,7 +52,7 @@ export function DeckEditions({
               failed={messages.token.copyFailed}
             />
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left [&_td]:py-1.5 [&_td]:pr-4 [&_th]:pb-1.5 [&_th]:pr-4 [&_th]:font-medium [&_th]:text-muted-foreground">
                 <caption className="sr-only">{t.versionsCaption(edition.code)}</caption>
                 <thead>
                   <tr>
@@ -68,10 +76,10 @@ export function DeckEditions({
         ))
       ) : (
         <>
-          <p>{t.noEditions}</p>
-          <p>{t.testAddressPattern}</p>
+          <p className="text-muted-foreground">{t.noEditions}</p>
+          <p className="text-muted-foreground">{t.testAddressPattern}</p>
           <p>
-            <code className="break-all">{addressPattern}</code>
+            <code className="font-mono break-all">{addressPattern}</code>
           </p>
         </>
       )}

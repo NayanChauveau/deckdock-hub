@@ -63,6 +63,10 @@ const textPairs = [
   ['brand', 'accent'],
   ['muted-foreground', 'secondary'],
   ['code-foreground', 'code'],
+  // Status pills: « Publié » (brand on secondary), « Masqué » (destructive on muted); the active
+  // entry of the author space's sidebar (brand on secondary).
+  ['brand', 'secondary'],
+  ['destructive', 'muted'],
   // The initial of a deck without an icon: white on each of the 8 stable colours.
   ...Array.from({ length: 8 }, (_, i) => ['initial-foreground', `initial-${i + 1}`]),
 ]

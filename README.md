@@ -57,7 +57,11 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   transaction de suppression), `module.ts` (les contributions des autres modules lues par
   `extensionsOf`), `server.ts` (`accountLinks`), `ui/AccountView.tsx` et `ui/AccountPage.tsx` (liens
   « Pages de votre compte »), `messages.ts` (leur libellé), et le nouveau `extension.ts` (contrat
-  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`, `visitorName`).
+  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`, `visitorName`). Refonte de
+  l’interface : `ui/SignInPage.tsx`, `ui/SignInForm.tsx` (état « lien envoyé », mention de la
+  création du compte), `ui/DeletedPage.tsx` dans la carte centrée du nouveau `ui/AccountCard.tsx` ;
+  `ui/AccountView.tsx` et `ui/AccountActions.tsx` en cartes ; `messages.ts` (`firstTime`,
+  `sentTitle`, `otherAddress`) ; tests `tests/accounts.ui.test.tsx` et `tests/e2e/accounts.spec.ts`.
 - **En-tête et pied de page communs** (`src/site/PublicShell.tsx`, `SiteChrome.tsx`,
   `HeaderMenus.tsx`, `viewer.ts`) : les routes des pages de module (`compte/*`, `decks`, `d/…`)
   ne réexportent plus la page, elles l’enveloppent dans `shellPage` (un module n’importe pas la
@@ -65,7 +69,9 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   `(legal)/legal-page.tsx` utilisent le cadre ; `src/core/ui/Maintenance.tsx` et les pages du
   module `accounts` (`SignInPage`, `DeletedPage`, `AccountView`) rendent un `<div>`, le `<main>`
   étant celui du cadre ; `src/styles/site.css` (en-tête, menus, pied). Le contrat
-  `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête).
+  `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête). L’en-tête lit la
+  session sans les cookies de l’administration (`visitorCookies` de `viewer.ts`) : un administrateur
+  aussi connecté comme visiteur voit son menu de visiteur, comme la page de connexion le voit.
 - **Accueil** (`src/app/(frontend)/[locale]/page.tsx`) : réécrite pour DeckDock (textes dans
   `src/site/home-content.ts`, blocs dans `src/site/HomePage.tsx`), elle montre les decks récents
   (`src/modules/decks/ui/RecentDecks.tsx`) : elle appartient donc au module `decks` (`routes` du
@@ -82,7 +88,8 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
 - **`tests/theme-contrast.test.ts`** : l’aperçu des notes (`bg-white` du cadre dans `PreviewCarousel.tsx`)
   est exclu de la recherche de couleurs écrites en dur : le document d’une note suppose une page blanche.
 - **`src/styles/theme.css`** : palette DeckDock (clair et sombre), polices système, rayon, ombre de carte ;
-  `tests/theme-contrast.test.ts` en vérifie les valeurs et les contrastes (AA, 3:1 pour bordures et focus).
+  `tests/theme-contrast.test.ts` en vérifie les valeurs et les contrastes (AA, 3:1 pour bordures et focus),
+  dont les pastilles de statut (`brand` sur `secondary`, `destructive` sur `muted`).
 - **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
 - **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
 - **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios

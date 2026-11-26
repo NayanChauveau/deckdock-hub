@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { accountMessages } from '../../src/modules/accounts/messages'
-import { accessibilityViolations, guardEveryPage } from './support'
+import { accessibilityViolations, guardEveryPage, signInAdmin } from './support'
 
 guardEveryPage()
 
@@ -63,6 +63,47 @@ test('accessibilité WCAG 2.1 AA en sombre : /fr/compte/connexion', async ({ pag
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/fr/compte/connexion')
   expect(await accessibilityViolations(page)).toEqual([])
+  // The « lien expiré » state of the card.
+  await page.goto('/fr/compte/connexion?error=EXPIRED_TOKEN')
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+    accountMessages.fr.signIn.linkError,
+  )
+  expect(await accessibilityViolations(page)).toEqual([])
+})
+
+test('connexion : la carte « lien envoyé », en clair et en sombre, à 390 px', async ({ page }) => {
+  const t = accountMessages.en.signIn
+  await page.goto('/en/compte/connexion')
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText(t.firstTime)).toBeVisible()
+  await page.getByLabel(t.email).fill(newVisitor('en'))
+  await page.getByRole('button', { name: t.submit }).click()
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(t.sent)
+  await expect(page.getByRole('heading', { level: 2, name: t.sentTitle })).toBeFocused()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.emulateMedia({ colorScheme: 'dark' })
+  expect(await accessibilityViolations(page)).toEqual([])
+  await noOverflowAt390(page)
+  await page.getByRole('button', { name: t.otherAddress }).click()
+  await expect(page.getByLabel(t.email)).toBeVisible()
+})
+
+test('en-tête : un administrateur aussi connecté comme visiteur voit son menu de visiteur', async ({
+  page,
+}) => {
+  await signInAdmin(page)
+  await signIn(page, 'fr', newVisitor('fr'))
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toHaveCount(0)
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  // The same on a page of the site layer, and the sign-in page still sends them to their account.
+  await page.goto('/fr/mentions-legales')
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  await page.goto('/fr/compte/connexion')
+  await expect(page).toHaveURL(/\/fr\/compte$/)
+  // The administration still sees an administrator.
+  await page.goto('/admin')
+  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà servi est expliqué', async ({
@@ -73,6 +114,12 @@ test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà ser
   const link = await signIn(page, 'fr', email)
   await expect(page.getByRole('heading', { level: 1, name: t.account.title })).toBeVisible()
   expect(await accessibilityViolations(page)).toEqual([])
+  await page.emulateMedia({ colorScheme: 'dark' })
+  // Reloaded: axe would otherwise measure colours still transitioning to the dark theme.
+  await page.reload()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.reload()
   // Confirmation step open as well: it is part of the page a visitor may see.
   await page.getByRole('button', { name: t.account.deleteStart }).click()
   await expect(page.getByText(t.account.deleteConfirmQuestion)).toBeFocused()

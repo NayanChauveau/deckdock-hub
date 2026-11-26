@@ -8,7 +8,7 @@ import { isLocale, type Locale } from '@/core/i18n/locales'
 import { logger } from '@/core/logger'
 import { extensionsOf } from '@/core/modules/resolve'
 import { SiteFrame } from '@/site/SiteChrome'
-import { viewerFrom, type Viewer } from '@/site/viewer'
+import { viewerFrom, visitorCookies, type Viewer } from '@/site/viewer'
 
 /**
  * What a module contributes to the accounts module for the header (`extensions.accounts`, the
@@ -25,18 +25,22 @@ const isVisitorNameSource = (value: unknown): value is VisitorNameSource =>
 
 /**
  * The viewer of this request, once per render. Without a cookie, nobody: no lookup at all. With
- * one, Payload's auth strategies decide (the accounts module's resolves a visitor account, never an
- * administrator). Read as same-origin, like the maintenance gate: the header shows the visitor's
- * own state to their own browser, even after a link from elsewhere; the only write is the one an
- * auth strategy may do on a first visit. A failure shows the signed-out header, never an error.
+ * one, Payload's auth strategies decide (the accounts module's resolves a visitor account), on the
+ * cookies without the administration's: an administrator who is also signed in as a visitor sees
+ * their visitor menu, as the sign-in page sees them (it sends them to their account). Read as
+ * same-origin, like the maintenance gate: the header shows the visitor's own state to their own
+ * browser, even after a link from elsewhere; the only write is the one an auth strategy may do on a
+ * first visit. A failure shows the signed-out header, never an error.
  */
 export const requestViewer = cache(async (): Promise<Viewer> => {
   const cookie = (await headers()).get('cookie')
   if (!cookie) return { signedIn: false }
   try {
     const payload = await getPayload({ config })
+    const visitor = visitorCookies(cookie, payload.config.cookiePrefix)
+    if (!visitor) return { signedIn: false }
     const { user } = await payload.auth({
-      headers: new Headers({ cookie, 'sec-fetch-site': 'same-origin' }),
+      headers: new Headers({ cookie: visitor, 'sec-fetch-site': 'same-origin' }),
     })
     return await viewerFrom(user, async (customerId) => {
       for (const source of extensionsOf(payload, 'accounts', isVisitorNameSource)) {

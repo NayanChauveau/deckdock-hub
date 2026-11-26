@@ -4,7 +4,7 @@ import { afterEach, test } from 'node:test'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react/pure'
 import { SiteFooter, SiteHeader } from '../src/site/SiteChrome'
 import { messages } from '../src/site/messages'
-import { viewerFrom } from '../src/site/viewer'
+import { viewerFrom, visitorCookies } from '../src/site/viewer'
 
 const paths = { fr: '/fr/decks', en: '/en/decks' }
 const originalFetch = globalThis.fetch
@@ -173,4 +173,20 @@ void test('the viewer: a visitor account, with the name a module gives it, or no
   })
   assert.deepEqual(viewer, { signedIn: true, handle: 'demo' })
   assert.deepEqual(asked, [7])
+})
+
+void test('the header reads the visitor session even beside an administrator’s session', () => {
+  // The administration's cookies (`payload-token`, `payload-totp`) are left out: the accounts
+  // strategy then resolves the visitor, as the sign-in page's visitorSession does.
+  assert.equal(
+    visitorCookies(
+      'payload-token=a; customer.session_token=b; payload-totp=c; theme=dark',
+      'payload',
+    ),
+    'customer.session_token=b; theme=dark',
+  )
+  assert.equal(visitorCookies('customer.session_token=b', 'payload'), 'customer.session_token=b')
+  assert.equal(visitorCookies('payload-token=a', 'payload'), '')
+  // Another prefix, only its own cookies.
+  assert.equal(visitorCookies('site-token=a; payload-token=b', 'site'), 'payload-token=b')
 })

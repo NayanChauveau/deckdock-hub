@@ -6,8 +6,8 @@ export type Viewer = { signedIn: false } | { signedIn: true; handle: string | nu
 
 /**
  * The viewer of a request whose Payload user is `user`. Only a visitor account (the `customers`
- * collection of the accounts module) is a visitor; an administrator never is, as the accounts
- * strategy decides. `nameOf` asks the modules for that account's name.
+ * collection of the accounts module) is a visitor; an administrator's user never is (requestViewer
+ * leaves the administration's cookies out first). `nameOf` asks the modules for that account's name.
  */
 export async function viewerFrom(
   user: unknown,
@@ -18,4 +18,18 @@ export async function viewerFrom(
   const id: unknown = Reflect.get(user, 'id')
   if (collection !== 'customers' || typeof id !== 'number') return { signedIn: false }
   return { signedIn: true, handle: await nameOf(id) }
+}
+
+/**
+ * The request's cookies without the administration's (`<prefix>-token`, `<prefix>-totp`…, Payload's
+ * `cookiePrefix`). The accounts strategy steps aside for an administrator's session, so that the
+ * administration never sees a visitor; the header, like the sign-in page's `visitorSession`, shows
+ * the visitor session of the same browser instead.
+ */
+export function visitorCookies(cookie: string, prefix: string): string {
+  return cookie
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part && !part.startsWith(`${prefix}-`))
+    .join('; ')
 }
