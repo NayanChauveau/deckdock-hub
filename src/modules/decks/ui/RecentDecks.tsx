@@ -1,14 +1,17 @@
 import type { ReactNode } from 'react'
 import { markdownText } from '../domain/markdown'
-import { catalogue } from '../server'
+import { recentDecks } from '../server'
 import { DeckCard } from './components/DeckCard'
 import { sitePayload } from './session'
 
+/** At most this many recent decks on the homepage. */
+const MOST = 6
 /** How many recent decks to show out of `available`: six, or full rows of up to three. */
-export const recentCount = (available: number) => (available >= 6 ? 6 : Math.min(available, 3))
+export const recentCount = (available: number) =>
+  available >= MOST ? MOST : Math.min(available, 3)
 
 /**
- * The most recently updated approved decks (the catalogue's first page, newest first), as cards in
+ * The most recently updated approved decks (at most six, newest first), as cards in
  * the visitor's language; `empty` when no deck is approved yet. `by` introduces the author's handle.
  * Texts come from the page that shows it (a module does not import the site layer).
  */
@@ -21,12 +24,7 @@ export async function RecentDecks({
   by: string
   empty: ReactNode
 }) {
-  const { decks } = await catalogue(await sitePayload(), {
-    q: undefined,
-    lang: undefined,
-    page: undefined,
-    locale,
-  })
+  const decks = await recentDecks(await sitePayload(), { locale, limit: MOST })
   const shown = decks.slice(0, recentCount(decks.length))
   if (shown.length === 0) return empty
   return (

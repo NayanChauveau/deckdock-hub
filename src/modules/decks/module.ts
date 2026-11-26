@@ -36,6 +36,7 @@ export const decksModule: SiteModule = {
     'tests/decks.files.test.ts',
     'tests/decks.http.ts',
     'tests/decks.catalogue.http.ts',
+    'tests/decks.catalogue.ui.test.tsx',
     'tests/decks.integration.ts',
     'tests/decks.preview.test.ts',
     'tests/decks.publish.test.ts',

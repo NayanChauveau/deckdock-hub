@@ -64,6 +64,47 @@ try {
   )
   await approveDeck(payload, mallory.deck.id)
   await hideDeck(payload, mallory.deck.id, 'test')
+  // Two more approved decks for the sort: updated (newest first) Zoologie, Ébénisterie, Verbes;
+  // by name in French Ébénisterie, Verbes irréguliers, Zoologie (accents sorted as letters), in
+  // English Irregular verbs, Woodwork, Zoologie (the shown edition's name); by notes (the largest
+  // edition) Ébénisterie (7, its English edition), Zoologie (6), Verbes (2).
+  const xavier = await author('xavier', 'ebenisterie')
+  await publish(
+    'fr',
+    catalogueDeck({
+      id: 'ebenisterie',
+      edition: 'fr',
+      version: 'v1',
+      name: 'Ébénisterie',
+      extraNotes: 1,
+    }),
+    xavier.token,
+  )
+  await publish(
+    'en',
+    catalogueDeck({
+      id: 'ebenisterie',
+      edition: 'en',
+      version: 'v1',
+      name: 'Woodwork',
+      extraNotes: 5,
+    }),
+    xavier.token,
+  )
+  await approveDeck(payload, xavier.deck.id)
+  const zoe = await author('zoe', 'zoologie')
+  await publish(
+    'fr',
+    catalogueDeck({
+      id: 'zoologie',
+      edition: 'fr',
+      version: 'v1',
+      name: 'Zoologie',
+      extraNotes: 4,
+    }),
+    zoe.token,
+  )
+  await approveDeck(payload, zoe.deck.id)
 
   // Maintenance on: visitors get the maintenance page, no deck.
   {
@@ -114,8 +155,65 @@ try {
     assert.ok(!(await get('/fr/decks?lang=de')).text.includes('href="/fr/d/ivan/verbes"'))
     assert.ok(!(await get('/fr/decks?q=confidentiel')).text.includes('Deck confidentiel'))
     // Odd parameters are ignored, never an error.
-    for (const query of ['?page=-1', '?page=99999', '?lang=%22%3E', '?q=%25_%5C', '?q=a&q=b'])
+    for (const query of [
+      '?page=-1',
+      '?page=99999',
+      '?lang=%22%3E',
+      '?q=%25_%5C',
+      '?q=a&q=b',
+      '?sort=%22%3E',
+      '?sort=name&sort=notes',
+    ])
       assert.equal((await get(`/fr/decks${query}`)).status, 200, query)
+  }
+
+  // The sort: newest first by default (and for an unknown value), by the shown edition's name, by
+  // the largest edition's notes.
+  {
+    const order = (html: string) =>
+      ['/d/zoe/zoologie', '/d/xavier/ebenisterie', '/d/ivan/verbes']
+        .map((path) => ({ path, at: html.indexOf(`${path}"`) }))
+        .sort((a, b) => a.at - b.at)
+        .map(({ path, at }) => (at < 0 ? `missing ${path}` : path.split('/')[3]))
+    const updated = ['zoologie', 'ebenisterie', 'verbes']
+    assert.deepEqual(order((await get('/fr/decks')).text), updated)
+    assert.deepEqual(order((await get('/fr/decks?sort=updated')).text), updated)
+    assert.deepEqual(
+      order((await get('/fr/decks?sort=popular')).text),
+      updated,
+      'unknown → updated',
+    )
+    assert.deepEqual(order((await get('/fr/decks?sort=name')).text), [
+      'ebenisterie',
+      'verbes',
+      'zoologie',
+    ])
+    assert.deepEqual(order((await get('/en/decks?sort=name')).text), [
+      'verbes',
+      'ebenisterie',
+      'zoologie',
+    ])
+    assert.deepEqual(order((await get('/fr/decks?sort=notes')).text), [
+      'ebenisterie',
+      'zoologie',
+      'verbes',
+    ])
+    // The card counts the notes of the edition it shows.
+    const fr = (await get('/fr/decks?q=ebenisterie')).text
+    assert.ok(fr.includes('3 notes'), 'French edition: 3 notes')
+    assert.ok((await get('/en/decks?q=woodwork')).text.includes('7 notes'), 'English edition')
+    // Language pills are plain links keeping the search and the sort, « Toutes les langues » first.
+    const pills = (await get('/fr/decks?q=verbes&sort=name')).text
+    assert.ok(pills.includes('href="/fr/decks?q=verbes&amp;sort=name"'), 'all languages')
+    assert.ok(pills.includes('href="/fr/decks?q=verbes&amp;lang=en&amp;sort=name"'), 'English')
+    assert.ok(
+      pills.indexOf('Toutes les langues') < pills.indexOf('href="/fr/decks?q=verbes&amp;lang=en'),
+    )
+    // A page past the last one: an empty page with a way back, never an error.
+    const beyond = await get('/fr/decks?page=99&sort=name')
+    assert.equal(beyond.status, 200)
+    assert.ok(beyond.text.includes('href="/fr/decks?sort=name"'), 'back to the first page')
+    assert.ok(!beyond.text.includes('href="/fr/d/ivan/verbes"'))
   }
 
   // The homepage's « Decks récents »: approved decks only, each card leading to its page, in the

@@ -7,7 +7,7 @@ import { accessibilityViolations, guardEveryPage } from './support'
 // tests/e2e/decks-catalogue.setup.ts (tests/run.mjs, browser stage).
 guardEveryPage()
 
-const { approved, pending } = CATALOGUE_SEED
+const { approved, pending, long } = CATALOGUE_SEED
 const deckPath = (locale: 'fr' | 'en') => `/${locale}/d/${approved.handle}/${approved.deckId}`
 
 async function noOverflowAt390(page: Page) {
@@ -61,36 +61,103 @@ test('accueil : les decks récents validés, en clair et en sombre, sans débord
   ).toContainText('Irregular verbs')
 })
 
-test('catalogue : recherche sans accents et filtre de langue', async ({ page }) => {
+test('catalogue : recherche sans accents, pastilles de langue et tri', async ({ page }) => {
   const t = catalogueMessages.fr.catalogue
   await page.goto('/fr/decks')
   await expect(page.getByRole('heading', { level: 1, name: t.title })).toBeVisible()
+  // The whole card is one link, named after the deck.
   const deck = page.getByRole('link', { name: 'Verbes irréguliers' })
   await expect(deck).toBeVisible()
+  await expect(deck).toHaveAttribute('href', deckPath('fr'))
+  await expect(deck).toHaveText('Verbes irréguliers')
+  const item = page.getByRole('listitem').filter({ has: deck })
+  await expect(item.getByRole('link')).toHaveCount(1)
+  await expect(item).toContainText(`${t.by} ${approved.handle}`)
+  await expect(item).toContainText(t.notes(2))
   // A pending deck is absent from the catalogue.
   await expect(page.getByText(pending.name)).toHaveCount(0)
-  expect(await accessibilityViolations(page)).toEqual([])
-  await noOverflowAt390(page)
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    expect(await accessibilityViolations(page), scheme).toEqual([])
+    await noOverflowAt390(page)
+  }
 
   // Search without case or accents.
-  await page.getByRole('searchbox', { name: t.searchLabel }).fill('IRREGULIERS')
+  const searchbox = page.getByRole('searchbox', { name: t.searchLabel })
+  await searchbox.fill('IRREGULIERS')
   await page.getByRole('button', { name: t.submit }).click()
   await expect(page).toHaveURL(/\/fr\/decks\?q=IRREGULIERS/)
   await expect(deck).toBeVisible()
-  await page.getByRole('searchbox', { name: t.searchLabel }).fill('confidentiel')
+  await searchbox.fill('confidentiel')
   await page.getByRole('button', { name: t.submit }).click()
   await expect(page.getByRole('heading', { level: 2, name: t.results(0) })).toBeVisible()
+  await expect(page.getByText(t.noResultText)).toBeVisible()
   await expect(page.getByText(pending.name)).toHaveCount(0)
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.getByRole('link', { name: t.clear }).click()
+  await expect(page).toHaveURL(/\/fr\/decks$/)
 
-  // Language filter: English matches (the deck has an English edition), German does not.
-  await page.getByRole('searchbox', { name: t.searchLabel }).fill('')
-  await page.getByLabel(t.languageLabel, { exact: true }).selectOption('en')
-  await page.getByRole('button', { name: t.submit }).click()
-  await expect(page).toHaveURL(/lang=en/)
+  // Language pills are links (no JavaScript needed): English matches (the deck's English edition,
+  // "Irregular verbs", holds the words searched), and the pill keeps the search and the sort.
+  const languages = page.getByRole('navigation', { name: t.languageFilter })
+  await expect(languages.getByRole('link').first()).toHaveText(t.anyLanguage)
+  await expect(languages.getByRole('link', { name: t.anyLanguage })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await page.goto('/fr/decks?q=verbs&sort=name')
+  await languages.getByRole('link', { name: 'English' }).click()
+  await expect(page).toHaveURL(/\/fr\/decks\?q=verbs&lang=en&sort=name$/)
+  await expect(languages.getByRole('link', { name: 'English' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
   await expect(deck).toBeVisible()
   await page.goto('/fr/decks?lang=de')
   await expect(page.getByRole('heading', { level: 2, name: t.results(0) })).toBeVisible()
   expect(await accessibilityViolations(page)).toEqual([])
+
+  // The sort, a native select of the same GET form.
+  await page.goto('/fr/decks')
+  await page.getByRole('combobox', { name: t.sortLabel }).selectOption('name')
+  await page.getByRole('button', { name: t.submit }).click()
+  await expect(page).toHaveURL(/sort=name/)
+  await expect(page.getByRole('combobox', { name: t.sortLabel })).toHaveValue('name')
+
+  // Past the last page: an empty page with a way back, not an error.
+  const response = await page.goto('/fr/decks?page=99')
+  expect(response?.status()).toBe(200)
+  await page.getByRole('link', { name: t.firstPage }).click()
+  await expect(page).toHaveURL(/\/fr\/decks$/)
+  await expect(deck).toBeVisible()
+})
+
+test('catalogue à 390 px : nom, description et pseudo très longs ne débordent pas', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.goto(`/fr/decks?q=${encodeURIComponent('membre supérieur')}`)
+    const link = page.getByRole('link', { name: long.name })
+    await expect(link).toBeVisible()
+    const card = page.getByRole('listitem').filter({ has: link })
+    await expect(card).toContainText(long.handle)
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow, scheme).toBeLessThanOrEqual(0)
+    // Nothing in the card sticks out of it either.
+    const box = await card.boundingBox()
+    const widest = await card.evaluate((element) =>
+      Math.max(
+        ...[...element.querySelectorAll('*')].map((child) => child.getBoundingClientRect().right),
+      ),
+    )
+    expect(box).not.toBeNull()
+    if (box) expect(widest, scheme).toBeLessThanOrEqual(box.x + box.width + 0.5)
+    expect(await accessibilityViolations(page), scheme).toEqual([])
+  }
 })
 
 test('page de deck en français : éditions, adresse à copier, aperçu isolé', async ({

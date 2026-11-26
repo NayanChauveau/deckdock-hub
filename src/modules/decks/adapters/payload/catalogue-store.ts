@@ -23,6 +23,7 @@ const editionCard = (value: unknown): EditionCard => ({
   description: nullableText(get(value, 'description')),
   icon: nullableText(get(value, 'icon')),
   languages: strings(get(value, 'languages')),
+  notes: count(get(value, 'notes')),
 })
 
 /**
@@ -35,7 +36,7 @@ export function payloadCatalogueStore(payload: Payload): CatalogueStore {
   const db = () => payload.db.drizzle
 
   return {
-    async search({ query, language, offset, limit }) {
+    async search({ query, language, sort, locale, offset, limit }) {
       // The latest version of each edition of an approved deck. The search text was folded at
       // publish time (domain/search.ts); versions older than it fall back on lower().
       const result = await db().execute<{
@@ -46,7 +47,14 @@ export function payloadCatalogueStore(payload: Payload): CatalogueStore {
         editions: unknown
       }>(sql`
         WITH latest AS (
-          SELECT d.id AS deck, a.handle, d.deck_id, e.code, v.summary, v.received_at
+          SELECT d.id AS deck, a.handle, d.deck_id, e.code, v.summary, v.received_at,
+            CASE WHEN jsonb_typeof(v.summary->'notes') = 'number'
+              THEN (v.summary->>'notes')::numeric ELSE 0 END AS notes,
+            EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(v.summary->'languages') = 'array'
+                  THEN v.summary->'languages' ELSE '[]'::jsonb END) AS tag
+              WHERE split_part(lower(tag), '-', 1) = ${locale}) AS speaks
           FROM decks d
           JOIN authors a ON a.id = d.author_id
           JOIN editions e ON e.deck_id = d.id
@@ -63,25 +71,43 @@ export function payloadCatalogueStore(payload: Payload): CatalogueStore {
                     CASE WHEN jsonb_typeof(summary->'languages') = 'array'
                       THEN summary->'languages' ELSE '[]'::jsonb END) AS tag
                   WHERE split_part(lower(tag), '-', 1) = ${language}))
+        ),
+        -- The edition a visitor reading the locale sees (application defaultEdition): the first by
+        -- code in that language, otherwise the first by code; codes compared byte-wise, like JS.
+        shown AS (
+          SELECT DISTINCT ON (deck) deck, coalesce(summary->>'name', '') AS name
+          FROM latest
+          WHERE deck IN (SELECT deck FROM matching)
+          ORDER BY deck, speaks DESC, code COLLATE "C"
+        ),
+        grouped AS (
+          SELECT l.deck, min(l.handle) AS handle, min(l.deck_id) AS deck_id,
+            max(l.received_at) AS updated, max(l.notes) AS notes,
+            json_agg(json_build_object(
+              'code', l.code,
+              'name', l.summary->>'name',
+              'description', l.summary->>'description',
+              'icon', l.summary->>'icon',
+              'languages', l.summary->'languages',
+              'notes', l.summary->'notes') ORDER BY l.code) AS editions
+          FROM latest l
+          WHERE l.deck IN (SELECT deck FROM matching)
+          GROUP BY l.deck
         )
-        SELECT count(*) OVER () AS total, min(l.handle) AS handle, min(l.deck_id) AS deck_id,
-          max(l.received_at) AS updated,
-          json_agg(json_build_object(
-            'code', l.code,
-            'name', l.summary->>'name',
-            'description', l.summary->>'description',
-            'icon', l.summary->>'icon',
-            'languages', l.summary->'languages') ORDER BY l.code) AS editions
-        FROM latest l
-        WHERE l.deck IN (SELECT deck FROM matching)
-        GROUP BY l.deck
-        ORDER BY max(l.received_at) DESC, l.deck
+        SELECT count(*) OVER () AS total, g.handle, g.deck_id, g.updated, g.editions
+        FROM grouped g
+        JOIN shown s ON s.deck = g.deck
+        -- Names in the Unicode order (accents and case as letters, « É » with « E »), notes largest
+        -- first; ties and the default, most recently updated first.
+        ORDER BY (CASE WHEN ${sort} = 'name' THEN s.name END) COLLATE "und-x-icu",
+          (CASE WHEN ${sort} = 'notes' THEN g.notes END) DESC NULLS LAST,
+          g.updated DESC, g.deck
         LIMIT ${limit} OFFSET ${offset}
       `)
       const rows = result.rows
       if (rows.length === 0 && offset > 0) {
         // Past the last page: the total still says how many pages there are.
-        const all = await this.search({ query, language, offset: 0, limit: 1 })
+        const all = await this.search({ query, language, sort, locale, offset: 0, limit: 1 })
         return { total: all.total, decks: [] }
       }
       return {

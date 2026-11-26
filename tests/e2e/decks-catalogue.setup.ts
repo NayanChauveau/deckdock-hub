@@ -1,5 +1,6 @@
 // Publishes the decks of tests/e2e/decks-catalogue.spec.ts before the browser stage's server starts
-// (tests/run.mjs): an approved deck with a French and an English edition, and a pending deck.
+// (tests/run.mjs): an approved deck with a French and an English edition, an approved deck with
+// very long texts, and a pending deck.
 // Through the publish use case itself (checker, blobs, versions), not HTTP.
 import { randomBytes, randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
@@ -41,11 +42,23 @@ async function publish(token: string, deck: ReturnType<typeof catalogueDeck>) {
 }
 
 try {
-  const { approved, pending } = CATALOGUE_SEED
+  const { approved, pending, long } = CATALOGUE_SEED
   const olivia = await author(approved.handle, approved.deckId)
   await publish(olivia.token, catalogueDeck({ id: approved.deckId, edition: 'fr', version: 'v1' }))
   await publish(olivia.token, catalogueDeck({ id: approved.deckId, edition: 'en', version: 'v1' }))
   await approveDeck(payload, olivia.deck.id)
+  const quentin = await author(long.handle, long.deckId)
+  await publish(
+    quentin.token,
+    catalogueDeck({
+      id: long.deckId,
+      edition: 'fr',
+      version: 'v1',
+      name: long.name,
+      description: long.description,
+    }),
+  )
+  await approveDeck(payload, quentin.deck.id)
   const peggy = await author(pending.handle, pending.deckId)
   await publish(
     peggy.token,
