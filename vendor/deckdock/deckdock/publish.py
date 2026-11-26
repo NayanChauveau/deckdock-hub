@@ -8,6 +8,8 @@ For each <dist>/<edition>/ containing deck.json, the edition directory is archiv
 <hub>/api/publish/<edition> with the deck's bearer token. Stops at the first failed edition.
 """
 
+from __future__ import annotations  # the Action may run this with a runner's Python 3.9
+
 import io
 import json
 import os
