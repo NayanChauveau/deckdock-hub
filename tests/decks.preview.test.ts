@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   catalogue,
+  CATALOGUE_SORTS,
   deckGone,
   deckPage,
   defaultEdition,
   previewCard,
+  recentDecks,
   type CatalogueDeps,
   type CatalogueStore,
   type PublicEdition,
@@ -361,6 +363,7 @@ const edition = (
   code,
   name: `Deck ${code}`,
   description: `About ${code}`,
+  icon: null,
   languages,
   license: 'CC-BY-4.0',
   homepage: 'https://ex.test',
@@ -401,14 +404,31 @@ function fakeStore(
             deckId: 'verbs',
             updatedAt: new Date('2026-11-26T10:00:00Z'),
             editions: [
-              { code: 'en', name: 'Verbs', description: 'English', languages: ['en'] },
-              { code: 'fr', name: 'Verbes', description: 'Français', languages: ['fr', 'en'] },
+              {
+                code: 'en',
+                name: 'Verbs',
+                description: 'English',
+                icon: '📘',
+                languages: ['en'],
+                notes: 120,
+              },
+              {
+                code: 'fr',
+                name: 'Verbes',
+                description: 'Français',
+                icon: null,
+                languages: ['fr', 'en'],
+                notes: 80,
+              },
             ],
           },
         ],
       }
     },
-    languages: async () => ['en', 'fr'],
+    languages: async () => {
+      calls.push('languages')
+      return ['en', 'fr']
+    },
     deck: async (handle, deckId) => {
       calls.push(`deck:${handle}/${deckId}`)
       return decks[`${handle}/${deckId}`] ?? null
@@ -429,8 +449,10 @@ void test('catalogue: 20 per page, query folded, language checked, edition of th
     locale: 'fr',
   })
   assert.deepEqual(calls, [
-    `search:${JSON.stringify({ query: 'verbes irreguliers', language: 'fr', offset: 40, limit: 20 })}`,
+    `search:${JSON.stringify({ query: 'verbes irreguliers', language: 'fr', sort: 'updated', locale: 'fr', offset: 40, limit: 20 })}`,
+    'languages',
   ])
+  assert.equal(result.sort, 'updated')
   assert.equal(result.page, 3)
   assert.equal(result.pageCount, 3)
   assert.equal(result.total, 41)
@@ -441,8 +463,13 @@ void test('catalogue: 20 per page, query folded, language checked, edition of th
     { name: card.name, description: card.description, languages: card.languages },
     { name: 'Verbes', description: 'Français', languages: ['fr', 'en'] },
   )
+  // The French edition has no icon of its own: the card shows none (initial), not the English one.
+  assert.equal(card.icon, null)
   assert.deepEqual(card.editions, ['en', 'fr'])
   assert.equal(card.href, '/fr/d/alice/verbs')
+  // The shown edition's notes and the author's handle, for the card's pills.
+  assert.equal(card.notes, 80)
+  assert.equal(card.handle, 'alice')
 
   const english = await catalogue(deps, {
     q: undefined,
@@ -453,7 +480,50 @@ void test('catalogue: 20 per page, query folded, language checked, edition of th
   assert.equal(english.page, 1)
   assert.equal(english.language, '')
   assert.equal(present(english.decks[0]).name, 'Verbs')
-  assert.match(present(calls.at(-1)), /"query":"","language":"","offset":0/)
+  assert.equal(present(english.decks[0]).icon, '📘')
+  assert.match(
+    present(calls.at(-2)),
+    /"query":"","language":"","sort":"updated","locale":"en","offset":0/,
+  )
+  assert.equal(present(english.decks[0]).notes, 120)
+})
+
+void test('catalogue: sorted by update (default), name or notes; anything else is update', async () => {
+  assert.deepEqual(CATALOGUE_SORTS, ['updated', 'name', 'notes'])
+  const { deps, calls } = fakeStore({})
+  const sortOf = async (sort: string | undefined) => {
+    const result = await catalogue(deps, {
+      q: undefined,
+      lang: undefined,
+      page: undefined,
+      sort,
+      locale: 'fr',
+    })
+    const sent = present(calls.filter((call) => call.startsWith('search:')).at(-1))
+    return {
+      result: result.sort,
+      sent: (JSON.parse(sent.slice('search:'.length)) as { sort: string }).sort,
+    }
+  }
+  assert.deepEqual(await sortOf('name'), { result: 'name', sent: 'name' })
+  assert.deepEqual(await sortOf('notes'), { result: 'notes', sent: 'notes' })
+  assert.deepEqual(await sortOf(undefined), { result: 'updated', sent: 'updated' })
+  for (const odd of ['NAME', 'popular', '', "name'; drop", 'updated '])
+    assert.deepEqual(await sortOf(odd), { result: 'updated', sent: 'updated' }, odd)
+})
+
+void test('recent decks: only the newest N approved decks, without the languages query', async () => {
+  const { deps, calls } = fakeStore({})
+  const decks = await recentDecks(deps, { locale: 'en', limit: 6 })
+  assert.deepEqual(calls, [
+    `search:${JSON.stringify({ query: '', language: '', sort: 'updated', locale: 'en', offset: 0, limit: 6 })}`,
+  ])
+  assert.equal(decks.length, 1)
+  const card = present(decks[0])
+  assert.deepEqual(
+    { name: card.name, href: card.href, notes: card.notes, icon: card.icon },
+    { name: 'Verbs', href: '/en/d/alice/verbs', notes: 120, icon: '📘' },
+  )
 })
 
 void test('default edition: the visitor’s language, otherwise the first by code', () => {
@@ -612,28 +682,42 @@ void test('robots.txt: the add-on files and the card previews are never crawled'
 })
 
 void test('markdown: pathological 200 KB inputs parse in linear time', () => {
-  const size = 200_000
-  const inputs = [
-    '[a '.repeat(size / 3),
-    '[a](b '.repeat(size / 6),
-    '[a]('.repeat(size / 4),
-    '**a '.repeat(size / 4),
-    '__a '.repeat(size / 4),
-    '*a '.repeat(size / 3),
-    '_a '.repeat(size / 3),
-    '`a '.repeat(size / 3),
-    '*'.repeat(size),
-    '[['.repeat(size / 2) + ']',
-    `# ${' '.repeat(size)}x`,
-    `- ${' '.repeat(size)}x`,
-    '> '.repeat(size / 2),
+  // Linear, not fast: an absolute time limit fails on a slow CI runner. Each input is parsed at
+  // 50 KB and at 200 KB (best of 3); a quadratic parser takes 16 times longer on the larger one,
+  // a linear one about 4 times. 8 leaves room for noise and still catches quadratic growth.
+  const shapes: ((n: number) => string)[] = [
+    (n) => '[a '.repeat(n / 3),
+    (n) => '[a](b '.repeat(n / 6),
+    (n) => '[a]('.repeat(n / 4),
+    (n) => '**a '.repeat(n / 4),
+    (n) => '__a '.repeat(n / 4),
+    (n) => '*a '.repeat(n / 3),
+    (n) => '_a '.repeat(n / 3),
+    (n) => '`a '.repeat(n / 3),
+    (n) => '*'.repeat(n),
+    (n) => '[['.repeat(n / 2) + ']',
+    (n) => `# ${' '.repeat(n)}x`,
+    (n) => `- ${' '.repeat(n)}x`,
+    (n) => '> '.repeat(n / 2),
   ]
-  for (const input of inputs) {
-    const start = performance.now()
-    const blocks = parseMarkdown(input)
-    const elapsed = performance.now() - start
-    assert.ok(elapsed < 200, `${JSON.stringify(input.slice(0, 8))}: ${elapsed.toFixed(0)} ms`)
-    assert.ok(blocks.length >= 1)
+  const best = (input: string) => {
+    let fastest = Infinity
+    for (let run = 0; run < 3; run++) {
+      const start = performance.now()
+      const blocks = parseMarkdown(input)
+      fastest = Math.min(fastest, performance.now() - start)
+      assert.ok(blocks.length >= 1)
+    }
+    return fastest
+  }
+  for (const shape of shapes) {
+    const small = best(shape(50_000))
+    const large = best(shape(200_000))
+    const label = JSON.stringify(shape(200_000).slice(0, 8))
+    assert.ok(
+      large < Math.max(8 * small, 25),
+      `${label}: ${large.toFixed(1)} ms at 200 KB vs ${small.toFixed(1)} ms at 50 KB`,
+    )
   }
   // Text without a construct comes back whole.
   const plain = '[a '.repeat(500)
@@ -800,4 +884,62 @@ void test('preview: adversarial inputs render in linear time', () => {
 
 void test('preview: texts longer than the cap are left out of a preview', () => {
   assert.equal(MAX_PREVIEW_TEXT_CHARS, 20_000)
+})
+
+void test('icon: the visitor’s edition, otherwise the first by code (catalogue and deck page)', async () => {
+  const { deps } = fakeStore({ 'alice/verbs': { id: 1, status: 'approved', customerId: 7 } })
+  const base = { ...deps.store }
+  deps.store.search = async (input) => {
+    const found = await base.search(input)
+    return {
+      ...found,
+      decks: found.decks.map((deck) => ({
+        ...deck,
+        editions: [
+          {
+            code: 'de',
+            name: 'Verben',
+            description: null,
+            icon: '🇩🇪',
+            languages: ['de'],
+            notes: 3,
+          },
+          { code: 'en', name: 'Verbs', description: null, icon: null, languages: ['en'], notes: 4 },
+        ],
+      })),
+    }
+  }
+  // A French visitor, no French edition: the first by code (de) gives name and icon.
+  const cards = await catalogue(deps, {
+    q: undefined,
+    lang: undefined,
+    page: undefined,
+    locale: 'fr',
+  })
+  assert.equal(present(cards.decks[0]).icon, '🇩🇪')
+  assert.equal(present(cards.decks[0]).name, 'Verben')
+  deps.store.editions = async () => [
+    edition('en', ['en'], { icon: '📘' }),
+    edition('de', ['de'], { icon: '🇩🇪' }),
+  ]
+  const page = await deckPage(deps, {
+    handle: 'alice',
+    deckId: 'verbs',
+    edition: undefined,
+    locale: 'fr',
+    viewer: async () => null,
+  })
+  assert.equal(page.kind, 'found')
+  assert.equal(page.edition.icon, '🇩🇪')
+  assert.equal(page.icon, '🇩🇪')
+  // Choosing another edition keeps the deck's own icon (the default edition's).
+  const en = await deckPage(deps, {
+    handle: 'alice',
+    deckId: 'verbs',
+    edition: 'en',
+    locale: 'fr',
+    viewer: async () => null,
+  })
+  assert.equal(en.kind === 'found' && en.edition.icon, '📘')
+  assert.equal(en.kind === 'found' && en.icon, '🇩🇪')
 })

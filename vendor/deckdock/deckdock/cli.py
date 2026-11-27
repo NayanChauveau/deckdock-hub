@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import cast
 
@@ -9,6 +10,12 @@ from deckdock import __version__
 from deckdock.compat import notetype_changes
 from deckdock.format import CompiledDeck, check_deck, check_dist
 from deckdock.issues import Issue, print_issues
+from deckdock.publish import (
+    DEFAULT_MAX_BYTES,
+    JsonReporter,
+    TextReporter,
+    publish_dist,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,7 +44,53 @@ def build_parser() -> argparse.ArgumentParser:
     _ = compat.add_argument(
         "--json", action="store_true", help="print the result as JSON"
     )
+    publish = subparsers.add_parser(
+        "publish",
+        help="publish compiled editions to a DeckDock hub (token in DECKDOCK_TOKEN)",
+    )
+    _ = publish.add_argument(
+        "dist", nargs="?", default="dist", help="dist directory (default: dist)"
+    )
+    _ = publish.add_argument(
+        "--hub",
+        default=None,
+        help="hub URL, https (default: the DECKDOCK_HUB_URL environment variable)",
+    )
+    _ = publish.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_MAX_BYTES,
+        help=f"largest archive sent, in bytes (default: {DEFAULT_MAX_BYTES})",
+    )
+    _ = publish.add_argument(
+        "--json", action="store_true", help="print the result as JSON on stdout"
+    )
     return parser
+
+
+def _publish(args: argparse.Namespace) -> int:
+    hub = cast(str | None, args.hub) or os.environ.get("DECKDOCK_HUB_URL", "")
+    token = os.environ.get("DECKDOCK_TOKEN", "")
+    max_bytes = cast(int, args.max_bytes)
+    dist = Path(cast(str, args.dist))
+    if not cast(bool, args.json):
+        reporter = TextReporter()
+        if max_bytes <= 0:
+            reporter.error("--max-bytes must be a positive number of bytes.")
+            return 1
+        return publish_dist(
+            dist, hub.strip(), token, reporter=reporter, max_bytes=max_bytes
+        )
+    collected = JsonReporter()
+    if max_bytes <= 0:
+        collected.error("--max-bytes must be a positive number of bytes.")
+        code = 1
+    else:
+        code = publish_dist(
+            dist, hub.strip(), token, reporter=collected, max_bytes=max_bytes
+        )
+    print(json.dumps(collected.report()))
+    return code
 
 
 def _check(args: argparse.Namespace) -> int:
@@ -113,4 +166,6 @@ def main(argv: list[str] | None = None) -> int:
         return _check(args)
     if command == "compat":
         return _compat(args)
+    if command == "publish":
+        return _publish(args)
     return 0

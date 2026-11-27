@@ -13,7 +13,10 @@ export interface SiteModule {
   tasks?: readonly TaskConfig[]
   /** Job queues run every minute by the web container when JOBS_AUTORUN=true. */
   queues?: readonly string[]
-  /** Files under src/app that only re-export this module's handlers or pages. */
+  /**
+   * Files under src/app that serve this module: API routes re-export its handlers; page routes
+   * re-export its pages or wrap them in the site's frame (deleted with the module).
+   */
   routes?: readonly string[]
   /**
    * The other files outside src/modules that exist only for this module (pages, scripts, tests),

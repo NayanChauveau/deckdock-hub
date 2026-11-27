@@ -5,8 +5,12 @@ import { accountMessages } from '../messages'
 import type { AccountLink } from '../extension'
 import { tooManyError, type DeletionLinkError } from '../paths'
 import { AccountActions } from './AccountActions'
+import { card } from './AccountCard'
 
-/** "Mon compte": the visitor's address and what they can do with their account. */
+const pill =
+  'inline-flex min-h-10 max-w-full items-center rounded-full border border-border bg-card px-4 text-sm font-medium wrap-anywhere hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+
+/** "Mon compte": the visitor's address, the pages of their account, then what they can do. */
 export function AccountView({
   locale,
   email,
@@ -26,30 +30,32 @@ export function AccountView({
   const messages = accountMessages[locale]
   const t = messages.account
   return (
-    <main className="commerce-page flex flex-col gap-8">
-      <h1>{t.title}</h1>
+    <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t.title}</h1>
       {linkError && (
         <Notice tone="error">
           {linkError === tooManyError ? messages.signIn.tooMany : t.deletionLinkError}
         </Notice>
       )}
-      <p>
-        {t.signedInAs} <strong className="break-all">{email}</strong>
-      </p>
-      {links.length > 0 && (
-        <nav aria-label={t.linksLabel}>
-          <ul className="flex flex-col gap-2">
-            {links.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href} className="text-link">
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
+      <div className={`${card} flex flex-col gap-4`}>
+        <p className="text-sm">
+          {t.signedInAs} <strong className="font-semibold break-all">{email}</strong>
+        </p>
+        {links.length > 0 && (
+          <nav aria-label={t.linksLabel}>
+            <ul className="flex flex-wrap gap-2">
+              {links.map((link) => (
+                <li key={link.href} className="max-w-full">
+                  <Link href={link.href} className={pill}>
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+      </div>
       <AccountActions locale={locale} email={email} {...(navigate ? { navigate } : {})} />
-    </main>
+    </div>
   )
 }

@@ -10,12 +10,25 @@ import { cardDocument, previewCSP, renderCard } from './preview'
 /** Decks per catalogue page. */
 export const CATALOGUE_PAGE_SIZE = 20
 
+/**
+ * The catalogue's orders: most recently updated first (the default), by the shown edition's name,
+ * by notes (the largest edition first).
+ */
+export const CATALOGUE_SORTS = ['updated', 'name', 'notes'] as const
+export type CatalogueSort = (typeof CATALOGUE_SORTS)[number]
+const isSort = (value: string): value is CatalogueSort =>
+  (CATALOGUE_SORTS as readonly string[]).includes(value)
+
 /** What the catalogue shows of one edition, from its latest version's summary. */
 export interface EditionCard {
   code: string
   name: string
   description: string | null
+  /** The deck's emoji for this edition, when it has one. */
+  icon: string | null
   languages: string[]
+  /** Notes of the latest version. */
+  notes: number
 }
 
 /** One approved deck matching a search, with all its editions. */
@@ -42,12 +55,16 @@ export interface PublicEdition extends EditionCard {
 export interface CatalogueStore {
   /**
    * Approved decks with an edition whose latest version's folded search text contains `query`
-   * (all when empty) and whose languages include `language` (a primary subtag; all when empty);
+   * (all when empty) and whose languages include `language` (a primary subtag; all when empty).
+   * Ordered by `sort`: most recently updated first; by name, the name of the edition shown to a
+   * visitor reading `locale` (see `defaultEdition`); by notes, the largest edition first. Ties are
    * most recently updated first.
    */
   search(input: {
     query: string
     language: string
+    sort: CatalogueSort
+    locale: string
     offset: number
     limit: number
   }): Promise<{ total: number; decks: CatalogueEntry[] }>
@@ -99,8 +116,11 @@ export interface CatalogueCard {
   href: string
   name: string
   description: string | null
+  icon: string | null
   languages: string[]
   editions: string[]
+  /** The shown edition's notes. */
+  notes: number
   updatedAt: Date
 }
 
@@ -108,6 +128,7 @@ export interface CataloguePage {
   /** The query as typed (trimmed), for the search field. */
   query: string
   language: string
+  sort: CatalogueSort
   page: number
   pageCount: number
   total: number
@@ -115,10 +136,33 @@ export interface CataloguePage {
   decks: CatalogueCard[]
 }
 
+/** One card per deck, showing the edition in the visitor's language, otherwise the first by code. */
+function cards(entries: readonly CatalogueEntry[], locale: string): CatalogueCard[] {
+  return entries.flatMap((entry): CatalogueCard[] => {
+    const shown = defaultEdition(entry.editions, locale)
+    if (!shown) return []
+    return [
+      {
+        handle: entry.handle,
+        deckId: entry.deckId,
+        href: deckPagePath(locale, entry.handle, entry.deckId),
+        name: shown.name,
+        description: shown.description,
+        icon: shown.icon,
+        languages: shown.languages,
+        editions: byCode(entry.editions).map((edition) => edition.code),
+        notes: shown.notes,
+        updatedAt: entry.updatedAt,
+      },
+    ]
+  })
+}
+
 /**
- * `/{locale}/decks?q=&lang=&page=`: approved decks only, 20 per page, searched without case or
- * accents in the name and description, filtered on the editions' languages. One line per deck,
- * showing the edition in the visitor's language, otherwise the first by code.
+ * `/{locale}/decks?q=&lang=&sort=&page=`: approved decks only, 20 per page, searched without case
+ * or accents in the name and description, filtered on the editions' languages, sorted (an unknown
+ * sort is the default, most recently updated first). One card per deck, showing the edition in
+ * the visitor's language, otherwise the first by code.
  */
 export async function catalogue(
   deps: CatalogueDeps,
@@ -126,47 +170,55 @@ export async function catalogue(
     q: string | undefined
     lang: string | undefined
     page: string | undefined
+    sort?: string | undefined
     locale: string
   },
 ): Promise<CataloguePage> {
   const query = (input.q ?? '').trim().slice(0, MAX_QUERY_LENGTH)
   const lower = (input.lang ?? '').trim().toLowerCase()
   const language = LANGUAGE.test(lower) ? lower : ''
+  const sort = input.sort && isSort(input.sort) ? input.sort : 'updated'
   const page = positive(input.page)
   const [found, languages] = await Promise.all([
     deps.store.search({
       query: foldSearch(query),
       language,
+      sort,
+      locale: input.locale,
       offset: (page - 1) * CATALOGUE_PAGE_SIZE,
       limit: CATALOGUE_PAGE_SIZE,
     }),
     deps.store.languages(),
   ])
-  const decks = found.decks.flatMap((entry): CatalogueCard[] => {
-    const shown = defaultEdition(entry.editions, input.locale)
-    if (!shown) return []
-    return [
-      {
-        handle: entry.handle,
-        deckId: entry.deckId,
-        href: deckPagePath(input.locale, entry.handle, entry.deckId),
-        name: shown.name,
-        description: shown.description,
-        languages: shown.languages,
-        editions: byCode(entry.editions).map((edition) => edition.code),
-        updatedAt: entry.updatedAt,
-      },
-    ]
-  })
   return {
     query,
     language,
+    sort,
     page,
     pageCount: Math.ceil(found.total / CATALOGUE_PAGE_SIZE),
     total: found.total,
     languages,
-    decks,
+    decks: cards(found.decks, input.locale),
   }
+}
+
+/**
+ * The `limit` most recently updated approved decks, as catalogue cards in the visitor's language
+ * (the homepage's « Decks récents »): one search, no languages list.
+ */
+export async function recentDecks(
+  deps: CatalogueDeps,
+  input: { locale: string; limit: number },
+): Promise<CatalogueCard[]> {
+  const found = await deps.store.search({
+    query: '',
+    language: '',
+    sort: 'updated',
+    locale: input.locale,
+    offset: 0,
+    limit: input.limit,
+  })
+  return cards(found.decks, input.locale)
 }
 
 type Access =
@@ -203,6 +255,8 @@ export type DeckPageResult =
       handle: string
       deckId: string
       status: DeckStatus
+      /** The deck's icon: the visitor's edition, otherwise the first by code (not the tab chosen). */
+      icon: string | null
       /** Sorted by code. */
       editions: PublicEdition[]
       edition: PublicEdition
@@ -239,6 +293,7 @@ export async function deckPage(
     handle,
     deckId,
     status: deck.status,
+    icon: defaultEdition(editions, input.locale)?.icon ?? null,
     editions,
     edition,
     address: (code) => editionAddress(deps.origin, handle, deckId, code),

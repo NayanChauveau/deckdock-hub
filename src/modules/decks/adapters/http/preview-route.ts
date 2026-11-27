@@ -1,5 +1,6 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { visitorHeaders } from '@/core/http/visitor-cookies'
 import { logger } from '@/core/logger'
 import { previewCard } from '../../server'
 import { customerIdOf } from '../payload/access'
@@ -41,8 +42,10 @@ export async function GET(request: Request): Promise<Response> {
   const [handle = '', deckId = '', edition = '', index = '', side = ''] = parts
   try {
     const payload = await getPayload({ config })
-    // Read only for a pending deck, which its author alone may preview.
-    const viewer = async () => customerIdOf((await payload.auth({ headers: request.headers })).user)
+    // Read only for a pending deck, which its author alone may preview. As on the deck page, the
+    // visitor session only: an administrator's cookie would make the visitor strategy step aside.
+    const headers = visitorHeaders(request.headers, payload.config.cookiePrefix)
+    const viewer = async () => customerIdOf((await payload.auth({ headers })).user)
     const result = await previewCard(payload, { handle, deckId, edition, index, side, viewer })
     if (result.kind === 'missing') return missing()
     return new Response(result.html, {

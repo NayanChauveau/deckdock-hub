@@ -33,6 +33,9 @@ export const accountMessages = {
       error: 'Impossible d’envoyer le lien pour le moment. Réessayez dans quelques instants.',
       linkError:
         'Ce lien de connexion n’est plus valable : il a expiré ou a déjà servi. Demandez-en un nouveau ci-dessous.',
+      firstTime: 'Pas encore de compte ? Il est créé à votre première connexion.',
+      sentTitle: 'Vérifiez votre boîte mail',
+      otherAddress: 'Utiliser une autre adresse',
     },
     account: {
       title: 'Mon compte',
@@ -94,6 +97,9 @@ export const accountMessages = {
       error: 'The link cannot be sent right now. Please try again in a few moments.',
       linkError:
         'This sign-in link no longer works: it has expired or was already used. Ask for a new one below.',
+      firstTime: 'No account yet? It is created the first time you sign in.',
+      sentTitle: 'Check your inbox',
+      otherAddress: 'Use another address',
     },
     account: {
       title: 'My account',

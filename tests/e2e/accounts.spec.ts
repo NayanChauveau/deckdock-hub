@@ -59,6 +59,38 @@ for (const locale of ['fr', 'en'] as const) {
   }
 }
 
+test('accessibilité WCAG 2.1 AA en sombre : /fr/compte/connexion', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/fr/compte/connexion')
+  expect(await accessibilityViolations(page)).toEqual([])
+  // The « lien expiré » state of the card.
+  await page.goto('/fr/compte/connexion?error=EXPIRED_TOKEN')
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+    accountMessages.fr.signIn.linkError,
+  )
+  expect(await accessibilityViolations(page)).toEqual([])
+})
+
+test('connexion : la carte « lien envoyé », en clair et en sombre, à 390 px', async ({ page }) => {
+  const t = accountMessages.en.signIn
+  await page.goto('/en/compte/connexion')
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText(t.firstTime)).toBeVisible()
+  await page.getByLabel(t.email).fill(newVisitor('en'))
+  await page.getByRole('button', { name: t.submit }).click()
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(t.sent)
+  await expect(page.getByRole('heading', { level: 2, name: t.sentTitle })).toBeFocused()
+  expect(await accessibilityViolations(page)).toEqual([])
+  // The sent state lives in the page (no reload): axe waits for the switch to the dark theme to
+  // finish its colour transitions (buttons have `transition-all`).
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.waitForFunction(() => document.getAnimations().length === 0)
+  expect(await accessibilityViolations(page)).toEqual([])
+  await noOverflowAt390(page)
+  await page.getByRole('button', { name: t.otherAddress }).click()
+  await expect(page.getByLabel(t.email)).toBeVisible()
+})
+
 test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà servi est expliqué', async ({
   page,
 }) => {
@@ -67,6 +99,12 @@ test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà ser
   const link = await signIn(page, 'fr', email)
   await expect(page.getByRole('heading', { level: 1, name: t.account.title })).toBeVisible()
   expect(await accessibilityViolations(page)).toEqual([])
+  await page.emulateMedia({ colorScheme: 'dark' })
+  // Reloaded: axe would otherwise measure colours still transitioning to the dark theme.
+  await page.reload()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.reload()
   // Confirmation step open as well: it is part of the page a visitor may see.
   await page.getByRole('button', { name: t.account.deleteStart }).click()
   await expect(page.getByText(t.account.deleteConfirmQuestion)).toBeFocused()
@@ -83,6 +121,43 @@ test('compte : connexion par lien, Mon compte, déconnexion ; un lien déjà ser
   await expect(page).toHaveURL(/\/fr\/compte\/connexion\?error=/)
   await expect(page.getByRole('main').getByRole('alert')).toHaveText(t.signIn.linkError)
   expect(await accessibilityViolations(page)).toEqual([])
+})
+
+test('en-tête : menu « Compte » une fois connecté, déconnexion depuis le menu', async ({
+  page,
+}) => {
+  const email = newVisitor('fr')
+  await signIn(page, 'fr', email)
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toHaveCount(0)
+  const menu = banner.getByRole('button', { name: /^Compte/ })
+  await expect(menu).toHaveAttribute('aria-expanded', 'false')
+  await menu.click()
+  await expect(banner.getByRole('link', { name: 'Compte' })).toHaveAttribute('href', '/fr/compte')
+  expect(await accessibilityViolations(page)).toEqual([])
+  // Also on a page of the site layer, and the same in the dark theme.
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/fr/mentions-legales')
+  await expect(banner.getByRole('button', { name: /^Compte/ })).toBeVisible()
+  await banner.getByRole('button', { name: /^Compte/ }).click()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await banner.getByRole('button', { name: 'Déconnexion' }).click()
+  await expect(page).toHaveURL(/\/fr$/)
+  await expect(banner.getByRole('link', { name: 'Connexion' })).toBeVisible()
+  await page.goto('/fr/compte')
+  await expect(page).toHaveURL(/\/fr\/compte\/connexion$/)
+})
+
+test('en-tête : à 390 px, le compte est dans le menu mobile', async ({ page }) => {
+  await signIn(page, 'en', newVisitor('en'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  const banner = page.getByRole('banner')
+  await expect(banner.getByRole('button', { name: /^Account/ })).toBeHidden()
+  await banner.getByRole('button', { name: 'Menu' }).click()
+  await expect(banner.getByRole('link', { name: 'My decks' })).toBeVisible()
+  await expect(banner.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  expect(await accessibilityViolations(page)).toEqual([])
+  await noOverflowAt390(page)
 })
 
 test('account: My account in English, then signing out of every device', async ({

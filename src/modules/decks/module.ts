@@ -16,7 +16,10 @@ export const decksModule: SiteModule = {
   // The review panel: pending decks, "Valider" and "Masquer" (admin/PendingDecks.tsx).
   dashboard: ['/modules/decks/admin/PendingDecks#PendingDecks'],
   migrations: ['20261125_224245_decks', '20261126_005922_versions_preview'],
+  // The hub's homepage shows the recent decks (ui/RecentDecks.tsx): it belongs to this module, like
+  // the catalogue's route (a file that imports a module is listed by it; tests/architecture.test.ts).
   routes: [
+    'src/app/(frontend)/[locale]/page.tsx',
     'src/app/(frontend)/api/publish/[edition]/route.ts',
     'src/app/(frontend)/d/[[...path]]/route.ts',
     'src/app/(frontend)/[locale]/compte/decks/page.tsx',
@@ -28,11 +31,14 @@ export const decksModule: SiteModule = {
   ],
   files: [
     'tests/decks.addon.test.py',
+    'tests/decks.components.ui.test.tsx',
     'tests/decks.domain.test.ts',
     'tests/decks.files.test.ts',
     'tests/decks.http.ts',
     'tests/decks.catalogue.http.ts',
+    'tests/decks.catalogue.ui.test.tsx',
     'tests/decks.integration.ts',
+    'tests/decks.page.ui.test.tsx',
     'tests/decks.preview.test.ts',
     'tests/decks.publish.test.ts',
     'tests/decks.review.test.ts',

@@ -17,6 +17,9 @@ export function catalogueDeck(options: {
   edition: 'fr' | 'en'
   version: string
   name?: string
+  description?: string
+  /** Basic notes added after the two usual ones (for the « notes » sort and pill). */
+  extraNotes?: number
 }) {
   const fr = options.edition === 'fr'
   return {
@@ -27,9 +30,11 @@ export function catalogueDeck(options: {
       name: options.name ?? (fr ? 'Verbes irréguliers' : 'Irregular verbs'),
       language: [options.edition],
       version: options.version,
-      description: fr
-        ? 'Les verbes **irréguliers** : Conjugaison, été comme hiver. <b>pas du HTML</b>'
-        : 'The **irregular** verbs. <b>not HTML</b>',
+      description:
+        options.description ??
+        (fr
+          ? 'Les verbes **irréguliers** : Conjugaison, été comme hiver. <b>pas du HTML</b>'
+          : 'The **irregular** verbs. <b>not HTML</b>'),
       license: 'CC-BY-4.0',
       homepage: 'https://example.test/verbes',
     },
@@ -78,6 +83,13 @@ export function catalogueDeck(options: {
         fields: { Text: fr ? 'Il est {{c1::parti}}.' : 'He has {{c1::gone}}.', Extra: '' },
         tags: [],
       },
+      ...Array.from({ length: options.extraNotes ?? 0 }, (_, i) => ({
+        guid: `${options.id}-extra-${i}`,
+        notetype: 'basic',
+        deck: '',
+        fields: { Front: `extra ${i}`, Back: `${i}` },
+        tags: [],
+      })),
     ],
     media: [{ filename: 'a.png', sha256: sha256(PNG), size: PNG.length }],
   }
@@ -94,4 +106,11 @@ export const catalogueArchive = (deck: ReturnType<typeof catalogueDeck>): Promis
 export const CATALOGUE_SEED = {
   approved: { handle: 'olivia', deckId: 'verbes' },
   pending: { handle: 'peggy', deckId: 'secret', name: 'Deck confidentiel' },
+  /** An approved deck with an 80-character name and a 2,000-character one-line description. */
+  long: {
+    handle: 'quentin-pseudo-vraiment-long',
+    deckId: 'nom-tres-long',
+    name: 'Anatomie humaine : muscles, os, articulations et innervation du membre supérieur',
+    description: `Description-${'sans-espace-'.repeat(165)}`.slice(0, 2_000),
+  },
 } as const

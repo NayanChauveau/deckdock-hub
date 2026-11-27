@@ -480,3 +480,33 @@ void test('an upload not received in time is too slow, and is cleaned up', async
   assert.equal(await fast.receive(), 'ok')
   await fast.dispose()
 })
+
+void test(
+  'the real checker accepts a single-emoji icon and refuses anything else (deckdock 0.3.0)',
+  { skip: !process.env['HUB_PYTHON'] },
+  async () => {
+    const checker = pythonChecker({
+      HUB_PYTHON: process.env['HUB_PYTHON'],
+      PATH: process.env['PATH'],
+      PYTHONPATH: join(process.cwd(), 'vendor/deckdock'),
+    })
+    const checked = async (icon: string) => {
+      const dir = await dataDir()
+      const edition = join(dir, 'dist', 'en')
+      await mkdir(join(edition, 'media'), { recursive: true })
+      const deck = deckJson()
+      await writeFile(
+        join(edition, 'deck.json'),
+        JSON.stringify({ ...deck, deck: { ...deck.deck, icon } }),
+      )
+      await writeFile(join(edition, 'media', 'a.png'), MEDIA)
+      return checker.check(join(dir, 'dist'))
+    }
+    assert.deepEqual(await checked('📚'), [])
+    const issues = await checked('📚📚')
+    assert.deepEqual(
+      issues.map((issue) => issue.where),
+      ['deck.icon'],
+    )
+  },
+)

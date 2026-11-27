@@ -12,7 +12,6 @@ const fr = {
   },
   space: {
     title: 'Mes decks',
-    account: 'Mon compte',
     intro:
       'Publiez vos decks DeckDock depuis leur dépôt : chaque deck a son jeton, que la CI utilise pour envoyer ses éditions au hub.',
     handleTitle: 'Choisissez votre pseudo',
@@ -47,6 +46,11 @@ const fr = {
     created: (deckId: string) =>
       `Le deck ${deckId} est créé. Il reste en attente de validation jusqu’à sa relecture par un administrateur.`,
     openDeck: 'Voir le deck',
+    newDeck: '+ Nouveau deck',
+    noVersion: 'Aucune version reçue',
+    lastVersion: (version: string) => `version ${version}`,
+    navLabel: 'Espace auteur',
+    nav: { decks: 'Mes decks', account: 'Compte', guide: 'Guide auteur' },
   },
   status: {
     pending: 'En attente de validation',
@@ -54,8 +58,29 @@ const fr = {
     hidden: 'Masqué',
   } satisfies Record<DeckStatus, string>,
   deck: {
-    back: 'Tous mes decks',
-    statusTitle: 'Statut',
+    breadcrumb: 'Fil d’Ariane',
+    guideTitle: 'Mettre en ligne ce deck',
+    guideIntro: 'Trois étapes, depuis le dépôt GitHub du deck :',
+    guideSteps: {
+      token: {
+        title: 'Le jeton',
+        before:
+          'Dans le dépôt, ouvrez Settings → Secrets and variables → Actions et ajoutez le secret',
+        after: 'avec le jeton reçu à la création du deck.',
+        link: 'Jeton perdu ? Régénérez-le',
+      },
+      address: {
+        title: 'L’adresse du hub',
+        before: 'Au même endroit, dans l’onglet Variables, ajoutez la variable',
+        after: 'avec cette valeur :',
+        label: 'Valeur de DECKDOCK_HUB_URL',
+      },
+      push: {
+        title: 'Le push',
+        text: 'Poussez sur main : le workflow envoie chaque édition au hub. La première version attend la validation d’un administrateur.',
+      },
+    },
+    guideLink: 'Lire le guide complet',
     statusHelp: {
       pending:
         'Un administrateur doit valider ce deck avant qu’il apparaisse dans le catalogue. En attendant, vous pouvez le tester avec son adresse.',
@@ -122,7 +147,6 @@ const en: DeckMessages = {
   },
   space: {
     title: 'My decks',
-    account: 'My account',
     intro:
       'Publish your DeckDock decks from their repository: each deck has its token, which the CI uses to send its editions to the hub.',
     handleTitle: 'Choose your handle',
@@ -157,6 +181,11 @@ const en: DeckMessages = {
     created: (deckId: string) =>
       `The deck ${deckId} is created. It awaits approval until an administrator reviews it.`,
     openDeck: 'Open the deck',
+    newDeck: '+ New deck',
+    noVersion: 'No version received yet',
+    lastVersion: (version: string) => `version ${version}`,
+    navLabel: 'Author space',
+    nav: { decks: 'My decks', account: 'Account', guide: 'Author guide' },
   },
   status: {
     pending: 'Awaiting approval',
@@ -164,8 +193,29 @@ const en: DeckMessages = {
     hidden: 'Hidden',
   },
   deck: {
-    back: 'All my decks',
-    statusTitle: 'Status',
+    breadcrumb: 'Breadcrumb',
+    guideTitle: 'Put this deck online',
+    guideIntro: 'Three steps, from the deck’s GitHub repository:',
+    guideSteps: {
+      token: {
+        title: 'The token',
+        before:
+          'In the repository, open Settings → Secrets and variables → Actions and add the secret',
+        after: 'with the token you got when you created the deck.',
+        link: 'Lost it? Regenerate it',
+      },
+      address: {
+        title: 'The hub address',
+        before: 'In the same place, on the Variables tab, add the variable',
+        after: 'with this value:',
+        label: 'Value of DECKDOCK_HUB_URL',
+      },
+      push: {
+        title: 'The push',
+        text: 'Push to main: the workflow sends each edition to the hub. The first version waits for an administrator’s approval.',
+      },
+    },
+    guideLink: 'Read the full guide',
     statusHelp: {
       pending:
         'An administrator must approve this deck before it appears in the catalogue. Meanwhile, you can test it with its address.',

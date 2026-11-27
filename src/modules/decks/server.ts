@@ -1,8 +1,15 @@
 import type { Payload } from 'payload'
 import type { Upload } from './adapters/files/workspace'
 import * as authorSpaceUseCases from './application/author-space'
+import type { AuthorDeckSummary } from './application/author-space'
 import * as catalogueUseCases from './application/catalogue'
-import type { CataloguePage, DeckPageResult, PreviewResult, Viewer } from './application/catalogue'
+import type {
+  CatalogueCard,
+  CataloguePage,
+  DeckPageResult,
+  PreviewResult,
+  Viewer,
+} from './application/catalogue'
 import * as useCases from './application/decks'
 import * as reviewUseCases from './application/review'
 import * as publishUseCase from './application/publish'
@@ -13,6 +20,7 @@ import { catalogueDeps, decksDeps, publishDeps, serveDeps } from './composition'
 import type { Author, Deck, EditionHistory, PendingDeck, RecordId } from './domain/model'
 
 export { DecksError, type DecksErrorCode } from './domain/errors'
+export type { AuthorDeckSummary } from './application/author-space'
 export type {
   Author,
   Deck,
@@ -26,9 +34,11 @@ export { ACCOUNT_DELETED_REASON } from './domain/review'
 export type { PublishBody, PublishResult } from './application/publish'
 export type { ServeRequest, ServeResult } from './application/serve'
 export { deckPagePath, editionAddress, previewPath, servePath } from './domain/serving'
+export { CATALOGUE_SORTS } from './application/catalogue'
 export type {
   CatalogueCard,
   CataloguePage,
+  CatalogueSort,
   DeckPageResult,
   PreviewResult,
   PublicEdition,
@@ -66,6 +76,19 @@ export const authorSpace = (
   customerId: RecordId,
 ): Promise<{ author: Author | null; decks: Deck[] }> =>
   authorSpaceUseCases.authorSpace(decksDeps(payload), customerId)
+/** The author's decks as the author space lists them, named for a reader of `locale`. */
+export const authorDeckSummaries = (
+  payload: Payload,
+  decks: readonly Deck[],
+  locale: string,
+): Promise<AuthorDeckSummary[]> => {
+  const { store } = catalogueDeps(payload)
+  return Promise.all(
+    decks.map(async (deck) =>
+      authorSpaceUseCases.summarizeDeck(deck, await store.editions(deck.id), locale),
+    ),
+  )
+}
 /** One of the customer's decks with its editions and received versions (`not_found` otherwise). */
 export const authorDeck = (
   payload: Payload,
@@ -92,16 +115,23 @@ export const publishEdition = (
 export const serveDeckFile = (payload: Payload, request: ServeRequest): Promise<ServeResult> =>
   serveUseCase.serveDeckFile(serveDeps(payload), request)
 
-/** `/{locale}/decks?q=&lang=&page=`: approved decks, 20 per page. */
+/** `/{locale}/decks?q=&lang=&sort=&page=`: approved decks, 20 per page. */
 export const catalogue = (
   payload: Payload,
   input: {
     q: string | undefined
     lang: string | undefined
     page: string | undefined
+    sort: string | undefined
     locale: string
   },
 ): Promise<CataloguePage> => catalogueUseCases.catalogue(catalogueDeps(payload), input)
+
+/** The `limit` most recently updated approved decks, in the visitor's language (the homepage). */
+export const recentDecks = (
+  payload: Payload,
+  input: { locale: string; limit: number },
+): Promise<CatalogueCard[]> => catalogueUseCases.recentDecks(catalogueDeps(payload), input)
 
 /** `/{locale}/d/<handle>/<deck-id>?edition=`: pending for its author only, hidden is gone. */
 export const deckPage = (

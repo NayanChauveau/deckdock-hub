@@ -43,3 +43,9 @@ void test('repository files: outside a git repository, every file but dependenci
     await writeFile(join(root, file), '')
   assert.deepEqual(repositoryFiles(root).sort(), ['e.md', 'src/a.ts'])
 })
+
+void test('the browser suite output folder, which may hold a test administrator, is git-ignored', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const lines = (await readFile(new URL('../.gitignore', import.meta.url), 'utf8')).split('\n')
+  assert.ok(lines.includes('test-results/'))
+})

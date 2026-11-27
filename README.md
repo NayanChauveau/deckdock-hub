@@ -42,6 +42,9 @@ en lecture seule. Le hub y ajoute deux choses, pour vérifier les decks envoyés
   l’utilisateur 1001 (un nouveau volume prend son propriétaire). En test, `HUB_DATA_DIR` désigne un
   dossier temporaire.
 
+L’image `production` contient aussi `content/` (les pages du guide des auteurs, lues par le
+serveur à l’exécution).
+
 Le smoke des images (`python3 deploy/smoke.py`, extension `deploy/smoke_site.py`) le vérifie sur
 l’image construite : version de `deckdock`, modules importés par la bibliothèque (sha256 compris),
 extensions retirées bien absentes, absence de pip, vérification d’un deck valide et d’un
@@ -57,14 +60,80 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   transaction de suppression), `module.ts` (les contributions des autres modules lues par
   `extensionsOf`), `server.ts` (`accountLinks`), `ui/AccountView.tsx` et `ui/AccountPage.tsx` (liens
   « Pages de votre compte »), `messages.ts` (leur libellé), et le nouveau `extension.ts` (contrat
-  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`).
+  `extensions.accounts` : `beforeCustomerDelete`, `accountLinks`, `visitorName`). Refonte de
+  l’interface : `ui/SignInPage.tsx`, `ui/SignInForm.tsx` (état « lien envoyé », mention de la
+  création du compte), `ui/DeletedPage.tsx` dans la carte centrée du nouveau `ui/AccountCard.tsx` ;
+  `ui/AccountView.tsx` et `ui/AccountActions.tsx` en cartes ; `messages.ts` (`firstTime`,
+  `sentTitle`, `otherAddress`) ; tests `tests/accounts.ui.test.tsx` et `tests/e2e/accounts.spec.ts`.
+- **En-tête et pied de page communs** (`src/site/PublicShell.tsx`, `SiteChrome.tsx`,
+  `HeaderMenus.tsx`, `viewer.ts`) : les routes des pages de module (`compte/*`, `decks`, `d/…`)
+  ne réexportent plus la page, elles l’enveloppent dans `shellPage` (un module n’importe pas la
+  couche du site) ; `layout.tsx`, `not-found.tsx`, `error.tsx`, `page.tsx` et
+  `(legal)/legal-page.tsx` utilisent le cadre ; `src/core/ui/Maintenance.tsx` et les pages du
+  module `accounts` (`SignInPage`, `DeletedPage`, `AccountView`) rendent un `<div>`, le `<main>`
+  étant celui du cadre ; `src/styles/site.css` (en-tête, menus, pied). Le contrat
+  `extensions.accounts` gagne `visitorName` (le pseudo du menu de l’en-tête). L’en-tête lit la
+  session sans les cookies de l’administration (`visitorCookies` du nouveau
+  `src/core/http/visitor-cookies.ts`) : un administrateur aussi connecté comme visiteur voit son
+  menu de visiteur, comme la page de connexion le voit ; l’espace auteur (`signedInCustomer` du
+  module `decks`, via `visitorHeaders`) le reconnaît de même.
+- **Accueil** (`src/app/(frontend)/[locale]/page.tsx`) : réécrite pour DeckDock (textes dans
+  `src/site/home-content.ts`, blocs dans `src/site/HomePage.tsx`), elle montre les decks récents
+  (`src/modules/decks/ui/RecentDecks.tsx`) : elle appartient donc au module `decks` (`routes` du
+  manifeste, pièce `decks` de `starter.json`, qui la retire de `perSite` ;
+  `tests/starter-coverage.test.ts` suit). Le global `site-content` n’est plus lu par l’accueil
+  (la collection reste). `deploy/smoke_site.py` cherche une phrase de l’accueil sur `/fr` une fois
+  le site ouvert ; `src/styles/theme.css` gagne `--code` et `--code-foreground` (extrait du workflow).
+  **Attention** : l’accueil étant une route du module `decks`, `pnpm module:remove decks`
+  supprimerait aussi `src/app/(frontend)/[locale]/page.tsx` ; il faudrait d’abord redonner un
+  accueil au site.
+- **Réglages de l’administration devenus sans effet sur les pages** : le nom « DeckDock » est dans
+  le code (`SITE_NAME` de `src/site/SiteChrome.tsx`, qui sert aussi aux métadonnées de l’accueil),
+  si bien que les champs `siteName` et `footerText` du global `site-settings` ne pilotent plus
+  l’en-tête ni le pied de page ; les textes de l’accueil sont dans `src/site/home-content.ts` et le
+  global `site-content` n’est plus lu par l’accueil. Les champs restent (le seed les remplit) : les
+  retirer demanderait une migration. Les emails et la page de maintenance prennent le nom de
+  `site.config.json` (`identity.displayName`).
+- **Repris d’une version plus récente du starter** (à l’identique, pour le mode sombre et la 404
+  rendue sur le serveur) : `src/core/ui/theme/` (`preference.ts`, `ThemeScript.tsx`,
+  `InlineScript.tsx`, `ThemeToggle.tsx`), les libellés `theme` de `src/core/i18n/messages.ts`, `ThemeScript` dans le
+  `<head>` et `ThemeSync` dans `src/app/(frontend)/[locale]/layout.tsx`,
+  `src/app/global-not-found.tsx` et `experimental.globalNotFound` dans `next.config.mjs`, les
+  routes `(legal)/` (le `[...slug]/page.tsx` du hub devient `(legal)/legal-page.tsx`), avec
+  `tests/theme.test.ts`, `tests/theme.ui.test.tsx`, `tests/legal-routes.test.ts`. Une mise à jour
+  depuis le starter ne devrait rien y changer.
+- **Styles** : `src/styles/commerce.css` (parcours de commande, retiré avec le module `orders`) est
+  supprimé, avec son import dans `src/styles/globals.css` ; les classes de `site.css` qu’aucune
+  page n’utilise plus sont retirées, comme les tokens `--art-*` du visuel d’accueil du starter.
+- **`src/core/modules/types.ts`** : le commentaire de `routes` dit qu’une route de page peut
+  envelopper la page du module dans le cadre du site (`shellPage`), pas seulement la réexporter.
+- **Tests du starter adaptés** : `tests/e2e/site.spec.ts` (cadre commun, FR · EN, mode sombre, 404,
+  maintenance, liens internes, accessibilité en clair et en sombre, 390 px),
+  `tests/public-site.integration.ts` (pages servies par le build de production),
+  `tests/smoke_harness.py` (phrase de l’accueil), `tests/starter-coverage.test.ts` ; nouveaux :
+  `tests/site-chrome.ui.test.tsx`, `tests/visitor-cookies.test.ts`, `tests/guide.test.ts`.
+- **`package.json`** : `markdown-it` (rendu du guide).
+- **`tests/e2e/support.ts`** : `pageErrors` (erreurs de script et d’hydratation d’une page),
+  `pageOverflow`, et l’administrateur du navigateur gardé dans le dossier de sortie de Playwright
+  (un worker relancé après un échec se reconnecte au lieu de recréer le compte).
 - **`src/core/site.ts`** : schéma `modules.decks` (`maxUploadBytes`) de `site.config.json`.
 - **`src/core/http/csp.ts`** : `frame-src 'self'` sur les pages publiques (cadres de l’aperçu),
   `'none'` dans l’administration.
 - **`next.config.mjs`** : la CSP de base saute `/preview/`, et `/d/` reçoit la CSP des fichiers
   servis.
 - **`src/app/robots.ts`** : `/d/` et `/preview/` exclus.
+- **`tests/theme-contrast.test.ts`** : l’aperçu des notes (`bg-white` du cadre dans `PreviewCarousel.tsx`)
+  est exclu de la recherche de couleurs écrites en dur : le document d’une note suppose une page blanche.
+- **`src/styles/theme.css`** : palette DeckDock (clair et sombre), polices système, rayon, ombre de carte ;
+  `tests/theme-contrast.test.ts` en vérifie les valeurs et les contrastes (AA, 3:1 pour bordures et focus),
+  dont les pastilles de statut (`brand` sur `secondary`, `destructive` sur `muted`).
 - **`docker-compose.prod.yml`** : `HUB_DATA_DIR`, volume `hub-files`, routeur Traefik `-publish`.
+- **Guide des auteurs** (`/fr/guide`, `/en/guide`) : pages Markdown dans `content/guide/{fr,en}/`,
+  rendues sur le serveur par `src/site/guide` (markdown-it, HTML brut désactivé) et la route
+  `src/app/(frontend)/[locale]/guide/[[...slug]]/page.tsx`. Fichiers du starter touchés :
+  le nouveau `src/core/i18n/guide.ts` (adresses et ordre des pages, partagés par `SiteChrome.tsx` et
+  le module `decks`), `src/app/sitemap.ts` (pages du guide), `Dockerfile` (`content/` copié dans
+  l’image `production`, lu à l’exécution).
 - **`.github/workflows/ci.yml`** : Python 3.13 pour le groupe `web`.
 - **`tests/run.mjs`** : `HUB_DATA_DIR` temporaire, recherche de Python (`HUB_PYTHON`), scénarios
   `decks` et `decks_http`.

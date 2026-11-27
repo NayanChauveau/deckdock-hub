@@ -5,6 +5,7 @@ import { Button } from '@/core/ui/button'
 import { Notice } from '@/core/ui/feedback/Notice'
 import { accountMessages } from '../messages'
 import { accountPath, signInPath } from '../paths'
+import { card } from './AccountCard'
 
 const post = (path: string, body: unknown = {}) =>
   fetch(`/api/auth/${path}`, {
@@ -78,9 +79,11 @@ export function AccountActions({
     })
 
   return (
-    <div className="flex flex-col gap-10">
-      <section aria-labelledby="account-sessions" className="flex flex-col gap-4">
-        <h2 id="account-sessions">{t.sessionsTitle}</h2>
+    <div className="flex flex-col gap-6">
+      <section aria-labelledby="account-sessions" className={`${card} flex flex-col gap-4`}>
+        <h2 id="account-sessions" className="text-base font-semibold">
+          {t.sessionsTitle}
+        </h2>
         <div className="flex flex-wrap gap-3">
           <Button
             type="button"
@@ -103,18 +106,20 @@ export function AccountActions({
             {t.signOutEverywhere}
           </Button>
         </div>
-        <p id="account-everywhere-hint" className="text-muted-foreground">
+        <p id="account-everywhere-hint" className="text-sm text-muted-foreground">
           {t.signOutEverywhereHint}
         </p>
       </section>
-      <section aria-labelledby="account-delete" className="flex flex-col gap-4">
-        <h2 id="account-delete">{t.deleteTitle}</h2>
-        <p>{t.deleteIntro}</p>
+      <section aria-labelledby="account-delete" className={`${card} flex flex-col gap-4`}>
+        <h2 id="account-delete" className="text-base font-semibold">
+          {t.deleteTitle}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t.deleteIntro}</p>
         {deletionSent ? (
           <Notice>{t.deletionSent(email)}</Notice>
         ) : confirming ? (
           <div className="flex flex-col gap-4">
-            <p ref={question} tabIndex={-1} className="font-semibold">
+            <p ref={question} tabIndex={-1} className="text-sm font-semibold">
               {t.deleteConfirmQuestion}
             </p>
             <div className="flex flex-wrap gap-3">

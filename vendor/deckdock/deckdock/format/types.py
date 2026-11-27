@@ -22,6 +22,7 @@ class Deck(TypedDict):
     anki_id: NotRequired[int]
     options: NotRequired[DeckOptions]
     description: NotRequired[str]
+    icon: NotRequired[str]
     homepage: NotRequired[str]
     license: NotRequired[str]
     generator: NotRequired[str]

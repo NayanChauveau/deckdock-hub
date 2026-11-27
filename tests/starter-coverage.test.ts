@@ -52,7 +52,6 @@ void test('per-site, generated and starter-only files are never shared', () => {
     'src/site/messages.ts',
     'src/migrations/index.ts',
     'src/modules/index.ts',
-    'src/app/(frontend)/[locale]/page.tsx',
     'src/styles/site.css',
     'src/payload-types.ts',
     'tests/fixtures/release-plan.json',
@@ -64,6 +63,11 @@ void test('per-site, generated and starter-only files are never shared', () => {
     'starter.json',
   ])
     assert.equal(pieceOf(manifest, path), null, path)
+})
+
+void test('the hub’s homepage belongs to the decks piece (it shows the recent decks)', () => {
+  // The starter's own manifest keeps it per site: starter:update merges with that one, not this.
+  assert.equal(pieceOf(manifest, 'src/app/(frontend)/[locale]/page.tsx'), 'decks')
 })
 
 void test('the deploy piece is the kit and the update command; the socle requires it', () => {

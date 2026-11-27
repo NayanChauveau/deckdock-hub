@@ -13,8 +13,9 @@ src/styles/
   globals.css                    point d’entrée, imports et sources Tailwind
   theme.css                      tokens sémantiques et correspondances Tailwind
   base.css                       styles HTML de base, focus et mouvement réduit
-  site.css                       mise en page éditoriale existante
-  commerce.css                   mise en page du parcours de commande
+  site.css                       cadre des pages (en-tête, menus, pied), pages légales,
+                                 états (404, erreur, maintenance), pages du guide
+src/site/                        cadre commun (SiteChrome, PublicShell), accueil, guide
 src/core/ui/                     primitives shadcn, sans logique métier (socle)
   utils.ts                       point d’entrée partagé de cn
   forms/TextField.tsx            label, champ, aide et erreur accessibles
@@ -60,17 +61,83 @@ et 44 px en `lg`. Leurs variantes restent définies dans leurs recettes `cva`.
 ## Tokens et styles
 
 Les couleurs se définissent dans `theme.css`, avec des rôles : `background`,
-`foreground`, `primary`, `secondary`, `muted`, `destructive`, `border`, `input`,
-`ring`. `brand` conserve l’accent éditorial et les tokens `art-*` concernent
-uniquement le visuel de présentation existant.
+`foreground`, `card`, `primary`, `secondary`, `muted`, `accent`, `destructive`,
+`border`, `border-strong`, `input`, `ring`, `selection`.
+
+### La palette DeckDock
+
+| Rôle | Clair | Sombre | Usage |
+| --- | --- | --- | --- |
+| `background` | `#fbfaff` | `#0f0e1a` | fond des pages, légèrement teinté de violet |
+| `card` | `#ffffff` | `#17162a` | cartes |
+| `primary` | `#4f46e5` | `#5c5ff0` | remplissage des boutons (texte blanc) |
+| `brand` | `#4f46e5` | `#a5b4fc` | l’accent indigo utilisé comme texte (liens, pastille « Publié ») |
+| `ring` | `#4f46e5` | `#6366f1` | anneau de focus |
+| `gradient-from` → `gradient-to` | `#4f46e5` → `#db2777` | `#818cf8` → `#f472b6` | mot clé du titre de l’accueil (`.text-gradient`) |
+| `shadow-card` | ombre douce | bordure fine (`0 0 0 1px`) | relief des cartes |
+| `code`, `code-foreground` | sombre | sombre | extrait de workflow de l’accueil, sombre dans les deux thèmes |
+| `initial-1` … `initial-8`, `initial-foreground` | | | pastille d’initiale d’un deck sans icône (blanc sur 8 couleurs) |
+
+L’accent de la spécification est `#6366f1` en sombre : le blanc n’y atteint que
+4,47:1, d’où un `primary` sombre légèrement plus profond (`#5c5ff0`) ; `#6366f1`
+reste l’anneau de focus. Les cartes ont un rayon de 14 px (`--radius: 0.875rem`),
+les boutons sont en pilule (`rounded-full`, 44 px de haut pour les actions
+principales). La police est la pile système (`ui-sans-serif, system-ui, …`) :
+aucune police n’est chargée. `tests/theme-contrast.test.ts` épingle ces valeurs et
+vérifie chaque paire texte/fond (AA) et chaque bordure ou focus (3:1) dans les
+deux thèmes.
+
+### Les composants du hub
+
+- **Cadre** (`src/site/SiteChrome.tsx`) : `SiteFrame` (lien d’évitement, en-tête,
+  `<main>`, pied), `SiteHeader` (« ● DeckDock », Catalogue, Publier un deck, Guide,
+  FR · EN, `ThemeToggle`, Connexion ou le menu du compte ; sous 768 px, le menu
+  mobile) et `SiteFooter`. `src/site/HeaderMenus.tsx` : `AccountMenu`, `MobileMenu`,
+  `SignOutButton` (composants client). `src/site/PublicShell.tsx` lit le visiteur sur
+  le serveur et dessine le cadre ; `shellPage` enveloppe les pages des modules.
+- **Decks** (`src/modules/decks/ui/components/`) : `DeckIcon` (icône de l’édition ou
+  initiale sur une couleur stable tirée de l’identifiant), `DeckCard` (carte du
+  catalogue et de l’accueil, un seul lien étiré sur toute la carte), `StatusBadge`
+  (pastilles « En attente de validation », « Publié », « Masqué »), `CopyField` (valeur en lecture seule
+  et bouton Copier), `Section` (carte titrée de l’espace auteur). Pages : `CatalogueView`,
+  `DeckView` et `PreviewCarousel` (aperçu en cadres isolés), `AuthorShell` (barre
+  latérale de l’espace auteur, onglets sous 768 px).
+- **Comptes** : `AccountCard` (`src/modules/accounts/ui/`), la carte centrée des pages
+  de connexion et de suppression.
+- **Guide** (`src/site/guide/`) : `GuidePage` (sommaire, page), `GuideCopy` (bouton
+  Copier des blocs de code), styles `.guide-prose` dans `site.css`.
 
 Les polices, rayons et ombres sont également centralisés. Les espacements des
 primitives utilisent l’échelle Tailwind ; les dimensions et grilles propres aux
-pages restent dans leurs fichiers de mise en page. Le thème public est **clair** ;
-aucun sélecteur ni promesse de mode sombre n’est ajouté.
+pages restent dans leurs fichiers de mise en page.
+
+## Clair et sombre
+
+Le site public a deux thèmes. Par défaut il suit le réglage du système
+(`prefers-color-scheme`) ; le bouton de l’en-tête (`ThemeToggle`) passe de
+« système » à « clair » puis « sombre », et le choix est gardé dans le navigateur
+(`localStorage['site-theme']`). Le thème est la classe `dark` sur `<html>`, celle
+qu’attendent les variantes `dark:` des primitives shadcn.
+
+- **Le mécanisme est dans le socle** (`src/core/ui/theme/`) : la préférence, le
+  script `ThemeScript` placé dans le `<head>` du layout public (il applique le
+  thème avant le premier affichage, donc sans flash, et porte le nonce de la CSP),
+  et le bouton. Le script ne s’exécute que depuis le HTML du serveur : dans le
+  navigateur (`InlineScript`), il est rendu en `type="text/plain"`, si bien qu’une
+  navigation côté client (changement de langue) ne produit pas de `<script>` que
+  React signalerait ; `ThemeSync` réapplique alors le thème avant l’affichage
+  (`useLayoutEffect`), sans image claire pendant le changement. Un site n’y touche pas.
+- **La palette est au site** : `theme.css` définit chaque couleur deux fois, dans
+  `:root` (clair) et `.dark` (sombre). Changer l’allure d’un site, c’est changer ces
+  deux blocs. `tests/theme-contrast.test.ts` vérifie que chaque couleur du clair a sa
+  valeur sombre, les contrastes AA des deux thèmes, et l’absence de couleur écrite
+  en dur dans les styles et composants publics.
+- L’administration Payload garde son propre thème ; les emails gardent leurs
+  couleurs fixes.
 
 Utiliser les classes sémantiques (`bg-primary`, `text-muted-foreground`,
-`border-input`, etc.) plutôt que des couleurs recopiées dans les pages. Les styles
+`border-input`, etc.) plutôt que des couleurs recopiées dans les pages : c’est ce
+qui fait fonctionner le mode sombre partout. Les styles
 de pages vivent dans `@layer components` pour que les utilitaires et variantes
 puissent les surcharger sans une course à la spécificité. Les anciens styles
 qui redessinaient tous les `input`, `select` et boutons ont été supprimés.

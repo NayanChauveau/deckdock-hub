@@ -22,3 +22,6 @@ restore-work/
 
 .test-build/
 .test-tsconfig-*.json
+
+# Browser suite output (may hold a test administrator's credentials)
+test-results/

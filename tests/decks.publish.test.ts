@@ -733,3 +733,13 @@ void test('an upload not received in time is refused with 408', async () => {
   assert.deepEqual(calls, ['receive', 'dispose'])
   assert.equal(ctx.slots.released, ctx.slots.taken)
 })
+
+void test('the summary keeps the deck icon when deck.json has one, and none otherwise', async () => {
+  const ctx = await setup()
+  const { deps } = ctx.deps({ deck: deckJson({ icon: '📘' }) })
+  assert.equal((await run(deps, ctx.token)).httpStatus, 200)
+  assert.equal(Reflect.get(Object(present(ctx.publish.versions[0]).summary), 'icon'), '📘')
+  const plain = await setup()
+  assert.equal((await run(plain.deps({}).deps, plain.token)).httpStatus, 200)
+  assert.equal('icon' in Object(present(plain.publish.versions[0]).summary), false)
+})
