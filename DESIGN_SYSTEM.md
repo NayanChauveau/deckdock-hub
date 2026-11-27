@@ -122,7 +122,11 @@ qu’attendent les variantes `dark:` des primitives shadcn.
 - **Le mécanisme est dans le socle** (`src/core/ui/theme/`) : la préférence, le
   script `ThemeScript` placé dans le `<head>` du layout public (il applique le
   thème avant le premier affichage, donc sans flash, et porte le nonce de la CSP),
-  et le bouton. Un site n’y touche pas.
+  et le bouton. Le script ne s’exécute que depuis le HTML du serveur : dans le
+  navigateur (`InlineScript`), il est rendu en `type="text/plain"`, si bien qu’une
+  navigation côté client (changement de langue) ne produit pas de `<script>` que
+  React signalerait ; `ThemeSync` réapplique alors le thème avant l’affichage
+  (`useLayoutEffect`), sans image claire pendant le changement. Un site n’y touche pas.
 - **La palette est au site** : `theme.css` définit chaque couleur deux fois, dans
   `:root` (clair) et `.dark` (sombre). Changer l’allure d’un site, c’est changer ces
   deux blocs. `tests/theme-contrast.test.ts` vérifie que chaque couleur du clair a sa

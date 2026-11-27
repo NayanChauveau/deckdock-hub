@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useSyncExternalStore } from 'react'
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
 import {
   SYSTEM_DARK_QUERY,
@@ -66,15 +66,33 @@ function subscribe(listener: () => void) {
 
 const usePreference = () => useSyncExternalStore(subscribe, readPreference, () => 'system' as const)
 
+/** Nothing to listen to: the value only differs between the server snapshot and the browser. */
+function unsubscribeNothing() {
+  return
+}
+const noSubscription = () => unsubscribeNothing
+/** False while hydrating server HTML, true in any render done in the browser. */
+const useHydrated = () =>
+  useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  )
+
 /**
  * Keeps <html> on the preferred theme: after a choice, when the system theme changes in « system »
- * mode, and on pages where the boot script never ran (an unknown URL is answered with Next's
- * error shell and rendered in the browser, where an inserted script does not execute). In the
- * public layout, on every page.
+ * mode, on pages where the boot script never ran (an unknown URL is answered with Next's error
+ * shell and rendered in the browser, where an inserted script does not execute), and after a
+ * client navigation that mounts a new root layout (the language switch), whose <html> React resets
+ * to its JSX attributes. A layout effect applies it before the browser paints. While hydrating, the
+ * preference is still the server's « system » snapshot: the boot script has already applied the
+ * real one, so nothing is applied until the browser render. In the public layout, on every page.
  */
 export function ThemeSync() {
   const preference = usePreference()
-  useEffect(() => {
+  const hydrated = useHydrated()
+  useLayoutEffect(() => {
+    if (!hydrated) return
     const media = window.matchMedia(SYSTEM_DARK_QUERY)
     const apply = () => {
       applyTheme(document.documentElement, resolveTheme(preference, media.matches))
@@ -85,7 +103,7 @@ export function ThemeSync() {
     return () => {
       media.removeEventListener('change', apply)
     }
-  }, [preference])
+  }, [preference, hydrated])
   return null
 }
 

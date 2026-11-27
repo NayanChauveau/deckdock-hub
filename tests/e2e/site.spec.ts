@@ -24,6 +24,56 @@ test('CSP : le site et l’administration envoient une politique avec nonce', as
   }
 })
 
+test('mode sombre : changer de langue ne rend pas de <script> côté client', async ({ page }) => {
+  // The language switch re-renders the [locale] root layout in the browser; React logs an error
+  // when that render contains an executable <script> (it never runs on the client).
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  await page.goto('/fr')
+  await page.getByRole('link', { name: /^EN/ }).click()
+  await expect(page).toHaveURL(/\/en(\/|$)/)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  expect(errors.filter((error) => /script tag/i.test(error))).toEqual([])
+})
+
+test('mode sombre : chargement puis changement de langue, sombre à chaque image', async ({
+  page,
+}) => {
+  // Hydration must not apply the server's « system » snapshot over the stored choice, and the
+  // language switch mounts a new [locale] root layout whose <html> React resets to its JSX
+  // attributes: the theme must be back before the browser paints the next frame.
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/fr')
+  await page.evaluate(() => {
+    window.localStorage.setItem('site-theme', 'dark')
+  })
+  // One letter per image of the next document, from its first one and through the client
+  // navigation (same document): D dark, - light, | the click.
+  await page.addInitScript(() => {
+    const record = () => {
+      const w = window as unknown as { themeFrames?: string }
+      w.themeFrames =
+        (w.themeFrames ?? '') + (document.documentElement.classList.contains('dark') ? 'D' : '-')
+      requestAnimationFrame(record)
+    }
+    requestAnimationFrame(record)
+  })
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Thème : sombre' })).toBeVisible()
+  const frames = () =>
+    page.evaluate(() => (window as unknown as { themeFrames: string }).themeFrames)
+  await page.evaluate(() => {
+    ;(window as unknown as { themeFrames: string }).themeFrames += '|'
+  })
+  await page.getByRole('link', { name: /^EN/ }).click()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await page.waitForTimeout(500)
+  expect(await frames()).toMatch(/D{5}\|D{5}/)
+  expect(await frames(), 'images sans la classe dark').not.toContain('-')
+})
+
 for (const path of [
   '/fr',
   '/en',

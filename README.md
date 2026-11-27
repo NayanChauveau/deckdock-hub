@@ -96,7 +96,7 @@ Le module `decks` vit dans `src/modules/decks`, mais quelques fichiers du starte
   `site.config.json` (`identity.displayName`).
 - **Repris d’une version plus récente du starter** (à l’identique, pour le mode sombre et la 404
   rendue sur le serveur) : `src/core/ui/theme/` (`preference.ts`, `ThemeScript.tsx`,
-  `ThemeToggle.tsx`), les libellés `theme` de `src/core/i18n/messages.ts`, `ThemeScript` dans le
+  `InlineScript.tsx`, `ThemeToggle.tsx`), les libellés `theme` de `src/core/i18n/messages.ts`, `ThemeScript` dans le
   `<head>` et `ThemeSync` dans `src/app/(frontend)/[locale]/layout.tsx`,
   `src/app/global-not-found.tsx` et `experimental.globalNotFound` dans `next.config.mjs`, les
   routes `(legal)/` (le `[...slug]/page.tsx` du hub devient `(legal)/legal-page.tsx`), avec
