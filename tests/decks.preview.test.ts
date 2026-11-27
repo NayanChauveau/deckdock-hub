@@ -682,28 +682,42 @@ void test('robots.txt: the add-on files and the card previews are never crawled'
 })
 
 void test('markdown: pathological 200 KB inputs parse in linear time', () => {
-  const size = 200_000
-  const inputs = [
-    '[a '.repeat(size / 3),
-    '[a](b '.repeat(size / 6),
-    '[a]('.repeat(size / 4),
-    '**a '.repeat(size / 4),
-    '__a '.repeat(size / 4),
-    '*a '.repeat(size / 3),
-    '_a '.repeat(size / 3),
-    '`a '.repeat(size / 3),
-    '*'.repeat(size),
-    '[['.repeat(size / 2) + ']',
-    `# ${' '.repeat(size)}x`,
-    `- ${' '.repeat(size)}x`,
-    '> '.repeat(size / 2),
+  // Linear, not fast: an absolute time limit fails on a slow CI runner. Each input is parsed at
+  // 50 KB and at 200 KB (best of 3); a quadratic parser takes 16 times longer on the larger one,
+  // a linear one about 4 times. 8 leaves room for noise and still catches quadratic growth.
+  const shapes: ((n: number) => string)[] = [
+    (n) => '[a '.repeat(n / 3),
+    (n) => '[a](b '.repeat(n / 6),
+    (n) => '[a]('.repeat(n / 4),
+    (n) => '**a '.repeat(n / 4),
+    (n) => '__a '.repeat(n / 4),
+    (n) => '*a '.repeat(n / 3),
+    (n) => '_a '.repeat(n / 3),
+    (n) => '`a '.repeat(n / 3),
+    (n) => '*'.repeat(n),
+    (n) => '[['.repeat(n / 2) + ']',
+    (n) => `# ${' '.repeat(n)}x`,
+    (n) => `- ${' '.repeat(n)}x`,
+    (n) => '> '.repeat(n / 2),
   ]
-  for (const input of inputs) {
-    const start = performance.now()
-    const blocks = parseMarkdown(input)
-    const elapsed = performance.now() - start
-    assert.ok(elapsed < 200, `${JSON.stringify(input.slice(0, 8))}: ${elapsed.toFixed(0)} ms`)
-    assert.ok(blocks.length >= 1)
+  const best = (input: string) => {
+    let fastest = Infinity
+    for (let run = 0; run < 3; run++) {
+      const start = performance.now()
+      const blocks = parseMarkdown(input)
+      fastest = Math.min(fastest, performance.now() - start)
+      assert.ok(blocks.length >= 1)
+    }
+    return fastest
+  }
+  for (const shape of shapes) {
+    const small = best(shape(50_000))
+    const large = best(shape(200_000))
+    const label = JSON.stringify(shape(200_000).slice(0, 8))
+    assert.ok(
+      large < Math.max(8 * small, 25),
+      `${label}: ${large.toFixed(1)} ms at 200 KB vs ${small.toFixed(1)} ms at 50 KB`,
+    )
   }
   // Text without a construct comes back whole.
   const plain = '[a '.repeat(500)
