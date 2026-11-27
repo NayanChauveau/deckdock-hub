@@ -105,8 +105,27 @@ export async function signInAdmin(page: Page) {
 }
 
 export async function accessibilityViolations(page: Page) {
-  // After a theme switch (emulateMedia), colours animate for a moment: axe must measure the final
-  // colours, not a frame of the transition (a false contrast failure on slower CI runners).
+  // After a theme switch (emulateMedia) the page follows on the client (ThemeSync, once hydrated),
+  // then its colours animate for a moment. axe must measure the final colours: wait until <html>
+  // shows the theme the preference asks for, then until no transition is running (a false contrast
+  // failure on slower CI runners otherwise).
+  await page.waitForFunction(() => {
+    // The administration keeps Payload's own theme: nothing to wait for there.
+    if (window.location.pathname.startsWith('/admin')) return true
+    let stored: string | null = null
+    try {
+      stored = window.localStorage.getItem('site-theme')
+    } catch {
+      stored = null
+    }
+    const dark =
+      stored === 'dark' ||
+      (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    return document.documentElement.classList.contains('dark') === dark
+  })
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
   await page.waitForFunction(() => document.getAnimations().length === 0)
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
