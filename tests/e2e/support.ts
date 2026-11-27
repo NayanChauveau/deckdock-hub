@@ -105,6 +105,9 @@ export async function signInAdmin(page: Page) {
 }
 
 export async function accessibilityViolations(page: Page) {
+  // After a theme switch (emulateMedia), colours animate for a moment: axe must measure the final
+  // colours, not a frame of the transition (a false contrast failure on slower CI runners).
+  await page.waitForFunction(() => document.getAnimations().length === 0)
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()
