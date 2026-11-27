@@ -156,6 +156,9 @@ test('le lien Catalogue de l’en-tête mène au catalogue', async ({ page }) =>
 test('menu mobile : à 390 px, il s’ouvre et se referme au clavier', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/fr/decks')
+  // The menu button only works once React has hydrated it: on a slow CI runner, pressing Enter on
+  // the server-rendered button before that does nothing.
+  await page.waitForLoadState('networkidle')
   const banner = page.getByRole('banner')
   // The desktop links are folded into the menu.
   await expect(banner.getByRole('link', { name: 'Catalogue' })).toBeHidden()
